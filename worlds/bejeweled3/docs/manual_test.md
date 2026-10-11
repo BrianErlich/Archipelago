@@ -6,6 +6,15 @@ Work in a PowerShell window in the `Archipelago` folder. Tick each box and note 
 > Times matter: **start a stopwatch at step 3** and keep a rough log of when things happen. The playtest time goes
 > into `BALANCE.md` §5.
 
+## Easiest route: your installed Archipelago (tested 2026-10-11 in a copy of Brian's install)
+
+Double-click `playtest/bejeweled3.apworld` to install it. Then in the Archipelago Launcher:
+- **Generate:** put your YAML in `Players/` and click Generate (or use the pre-made seed `playtest/AP_*.zip`).
+- **Host:** click Host and pick the seed zip.
+- **Client:** click **Bejeweled 3 Client**, then `/connect localhost`, slot name `Brian`.
+
+The steps below do the same thing from source, in the project's venv.
+
 ## 0. Prepare (once, ~5 min)
 
 1. Generate a Short seed with default options (Claude can do this for you):
