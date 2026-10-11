@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from Options import OptionError
 from worlds.AutoWorld import World
 
 from . import items, locations, regions, rules, web_world
 from . import options as bj3_options
-
-logger = logging.getLogger("Bejeweled 3")
 
 
 class Bejeweled3World(World):
@@ -35,27 +31,13 @@ class Bejeweled3World(World):
     shard_required: int = 0
 
     def generate_early(self) -> None:
+        if self.options.goal == self.options.goal.option_shard_hunt:
+            self.shard_count, self.shard_required = items.shard_counts(self)
+        progression = (len(items.mode_items(self)) + items.relic_key_count(self) + items.level_cap_count(self)
+                       + items.badge_tier_count(self) + self.shard_count)
         location_count = len(locations.enabled_locations(self))
-        other_progression = (len(items.mode_items(self)) + items.relic_key_count(self)
-                             + items.level_cap_count(self) + items.badge_tier_count(self))
-        room = location_count - other_progression
-        if room < 0:
-            raise OptionError(f"Bejeweled 3 ({self.player_name}): these options leave {location_count} locations for "
-                              f"{other_progression} progression items. Enable more locations "
-                              f"(quest_locations, max_badge_tier, include_elite_badges).")
-
-        if self.options.goal != self.options.goal.option_shard_hunt:
-            return
-        self.shard_count = min(self.options.shard_count.value, room)
-        if self.shard_count < 1:
-            raise OptionError(f"Bejeweled 3 ({self.player_name}): no room for Jewel Shards. Enable more locations.")
-        if self.shard_count < self.options.shard_count.value:
-            logger.warning(f"Bejeweled 3 ({self.player_name}): only room for {self.shard_count} Jewel Shards "
-                           f"(asked for {self.options.shard_count.value}).")
-        self.shard_required = min(self.options.shard_required.value, self.shard_count)
-        if self.shard_required < self.options.shard_required.value:
-            logger.warning(f"Bejeweled 3 ({self.player_name}): Jewel Shards Required lowered to "
-                           f"{self.shard_required} to match the shard count.")
+        if progression > location_count:  # a data bug, not a player mistake: every length/goal combination must fit
+            raise RuntimeError(f"Bejeweled 3: {progression} progression items for {location_count} locations")
 
     def create_regions(self) -> None:
         regions.create_and_connect_regions(self)
@@ -75,11 +57,7 @@ class Bejeweled3World(World):
 
     def fill_slot_data(self) -> Mapping[str, Any]:
         return {
-            **self.options.as_dict(
-                "goal", "starting_mode", "relic_keys", "level_cap_items", "badge_tier_items", "max_badge_tier",
-                "include_skill_gates", "quest_locations",
-            ),
-            "include_elite_badges": sorted(self.options.include_elite_badges.value),
+            **self.options.as_dict("seed_length", "goal", "starting_mode"),
             "shard_count": self.shard_count,
             "shard_required": self.shard_required,
         }

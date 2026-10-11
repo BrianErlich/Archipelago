@@ -6,7 +6,19 @@ from BaseClasses import Region
 from rule_builder.rules import Has, Rule
 
 from .items import mode_item_name
-from .locations import ALL_MODES, BUTTERFLIES, CLASSIC, DIAMOND_MINE, ICE_STORM, LIGHTNING, MENU, POKER, QUEST, ZEN
+from .locations import (
+    ALL_MODES,
+    BUTTERFLIES,
+    CLASSIC,
+    DIAMOND_MINE,
+    ICE_STORM,
+    ICE_STORM_LENGTH,
+    LIGHTNING,
+    MENU,
+    POKER,
+    QUEST,
+    ZEN,
+)
 
 if TYPE_CHECKING:
     from .world import Bejeweled3World
@@ -25,7 +37,8 @@ def mode_rule(mode: str) -> Rule:
 
 
 def active_modes(world: Bejeweled3World) -> list[str]:
-    return [mode for mode in ALL_MODES if mode != ICE_STORM or world.options.include_skill_gates]
+    has_ice_storm = world.options.seed_length.value >= ICE_STORM_LENGTH
+    return [mode for mode in ALL_MODES if mode != ICE_STORM or has_ice_storm]
 
 
 def create_and_connect_regions(world: Bejeweled3World) -> None:

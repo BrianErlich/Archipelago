@@ -54,7 +54,7 @@ Notes:
 - **H:** ~11 of 45 common tiers, plus the 4 default elites.
 - **X:** ~12 of 45 common tiers — mostly Gold score tiers (500k) and Gold cumulative tiers. **Platinum is almost all X** (correctly off by default).
 
-## 3. Balancing problems this exposes (for the Phase 1 decision)
+## 3. Balancing problems the first design exposed
 
 1. **The default pool contains many X locations.** Gold is on by default (only Platinum is off). Gold tiers of the 100k-family score badges (500k in one game) and Stellar/Chromatic Gold (550 cumulative) are expert-level. In logic they are "in logic" as soon as the items arrive (SPEC §6.3 skill note), so **other players' progression could sit behind a 500k Poker game**. That is the single biggest fun risk.
 2. **Luck badges** (Annihilator, Superstar, Butterfly Bonanza Silver+) can't be forced by skill; a progression item there can stall a multiworld.
@@ -62,14 +62,31 @@ Notes:
 4. **Ice Storm** is double-gated by skill: its unlock (100k Lightning) and its own badges (100k Ice Storm). `include_skill_gates` already removes it by default. Good.
 5. **Tier skipping creates bursts:** a strong player who receives a Badge Tier item can clear Bronze + Silver + Gold of several badges at once. That's fun and fine, but it means tier items shouldn't be the very last progression items.
 
-## 4. Proposed fixes (decisions for Brian — none implemented yet)
+## 4. What was decided and built (2026-10-11)
 
-- **A. Difficulty tags in the location table.** Each location row carries its rating (E/M/H/X) as data. No new option needed.
-- **B. Use AP's progress types.** X locations, plus the luck elites, get `LocationProgressType.EXCLUDED`: they can only ever hold filler/junk, so nobody waits on them. H locations stay DEFAULT. This is standard AP practice and doesn't change the option set.
-- **C. Default badge tiers.** Either keep Gold in by default and rely on B, or replace `include_platinum_badges` with a `max_badge_tier` choice (Bronze / Silver / Gold / Platinum, default Silver or Gold). The second option is cleaner for players but changes the v1 option set, so it needs approval.
-- **D. Levels.** Level checks 2–8 (9–10 under `include_skill_gates`) are E→H and live-only. Fine as is. Levelord stays an elite location (H) and an alternative goal.
-- **E. Quests.** All 40 quest locations are valid: a relic's leftover quests stay playable. Later relics' quests are harder, but quests are mostly M with a time limit, and failing one has no cost. Keep all 40 as DEFAULT. Relic *n* quests require `Relic Key × n` (logic) **and** 4 quests of relic *n−1* done in game, which the keys model.
-- **F. Progression share target.** With defaults (7 modes + 5 keys + 4 caps + 3 tiers + 10 shards = 29 progression) against ~90 locations, that's ≈ 32%. Keep it above ~25% (test threshold).
+- **Seed Length is the backbone** (Brian: "like an order of fries", sized in hours). Short ~3 h (default, 30 checks) / Medium ~8 h (49) / Long ~20 h (87) / Marathon 100+ h (114). Each location row in `locations.py` carries the **shortest length that includes it**; the per-badge `lengths` tuples are where retuning happens.
+- **Difficulty tags in the location table** (E/M/H/X).
+- **H and X locations, plus the luck elites (Annihilator, Superstar), are `EXCLUDED`** (filler only). This fixes the "Quest Mode on High Voltage Bronze" problem seen in the first default seed. Short and Medium contain no H/X checks at all.
+- **Early game widened:** relic 1 needs no Relic Key, levels 2–5 always count, and the starting mode is Classic or Quest only (a Zen start opened just 2 checks, Lightning 3). Every length/goal/start opens at least 7 non-filler checks at the start; a test enforces it.
+- **Progression share** with defaults (Short, Shard Hunt): 13 of 30 = 43%. The test threshold is 25%. Levelord / Heroes Welcome goals on Long/Marathon drop to 14–17% (no shards), which is acceptable because those goals are opt-in and long.
+
+| Length | Checks | Progression (Shard Hunt) | Filler-only (H/X/luck) | Open at start (Classic) |
+|---|---|---|---|---|
+| Short | 30 | 13 | 0 | 7 |
+| Medium | 49 | 20 | 3 | 9 |
+| Long | 87 | 30 | 23 | 9 |
+| Marathon | 114 | 36 | 50 | 9 |
+
+### Time budget behind each length (estimates — calibrate with a stopwatch playtest)
+
+- **Short (~3 h):**
+  - Classic to level 5 (~20 min; also unlocks Poker in game).
+  - Relics 1–2 (16 quests at about 5 min each, plus retries: ~1.5 h).
+  - Quick Bronzes, which mostly overlap other play: Blaster, Inferno, Bejeweler 50k, Final Frenzy 20k, Ante Up 100k, The Gambler 10, Diamond Mine 100k, Relic Hunter 5, Butterfly Monarch 100k, Butterfly Bonanza 4.
+  - One game each of Poker, Diamond Mine and Butterflies.
+- **Medium (~8 h):** + levels 6–8 (one long Classic game), relic 3 (~1 h), the slow Bronzes (Stellar and Chromatic at 25 each: hours of overlapping play), Silvers for Inferno 400, Blaster 40, Final Frenzy 30k and The Gambler 30.
+- **Long (~20 h):** + relics 4–5 (~3 h, harder), Ice Storm, every Silver (several 300k one-game scores and 150 Hypercubes/Star Gems), reachable Golds, Heroes Welcome, Levelord.
+- **Marathon (100+ h):** + every Gold and Platinum (3,400 Flame Gems, 1,300 Hypercubes, 750k scores), Top Secret.
 
 ## 5. Playtest data log
 

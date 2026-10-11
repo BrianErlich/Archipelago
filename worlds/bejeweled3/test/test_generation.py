@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Any, ClassVar
 
-from BaseClasses import ItemClassification, LocationProgressType
+from BaseClasses import CollectionState, ItemClassification, LocationProgressType
 from test.general import gen_steps, setup_multiworld
 
 from ..items import BADGE_TIER, JEWEL_SHARD, LEVEL_CAP, RELIC_KEY
@@ -11,8 +11,12 @@ from ..locations import LOCATION_TABLE, badge_location_name, level_location_name
 from ..world import Bejeweled3World
 from . import Bejeweled3TestBase
 
-# Default options must give a pool where at least this share of items is progression (SPEC §9).
+# With default options, at least this share of the item pool must be progression (SPEC §9).
 MIN_PROGRESSION_SHARE = 0.25
+# Non-filler-only locations reachable with just the starting mode: guards against a narrow, slow start.
+MIN_SPHERE_ZERO = 7
+# Pool sizes are part of the design (BALANCE.md): change them on purpose, not by accident.
+LOCATION_COUNTS = {"short": 30, "medium": 49, "long": 87, "marathon": 114}
 
 ID_SNAPSHOT = Path(__file__).parent / "ids_snapshot.json"
 
@@ -21,206 +25,223 @@ def badge(name: str, tier: str | None = None) -> str:
     return f"Badge: {name}" + (f" - {tier}" if tier else "")
 
 
-class TestDefaults(Bejeweled3TestBase):
-    def test_item_count_equals_location_count(self) -> None:
+class LengthTestBase(Bejeweled3TestBase):
+    """Checks shared by every seed length; subclasses set `length` and the matching option."""
+    length: ClassVar[str] = "short"
+
+    def location_names(self) -> set[str]:
+        return {location.name for location in self.multiworld.get_locations(self.player)}
+
+    def test_location_count(self) -> None:
+        self.assertEqual(len(self.multiworld.get_locations()), LOCATION_COUNTS[self.length])
         self.assertEqual(len(self.multiworld.get_items()), len(self.multiworld.get_locations()))
+
+    def test_sphere_zero_is_wide(self) -> None:
+        state = CollectionState(self.multiworld)
+        open_checks = [location.name for location in self.multiworld.get_locations()
+                       if location.progress_type != LocationProgressType.EXCLUDED and location.can_reach(state)]
+        self.assertGreaterEqual(len(open_checks), MIN_SPHERE_ZERO, open_checks)
+
+    def test_filler_only_flags(self) -> None:
+        for location in self.multiworld.get_locations(self.player):
+            data = LOCATION_TABLE[location.name]
+            expected = LocationProgressType.EXCLUDED if data.filler_only else LocationProgressType.DEFAULT
+            with self.subTest(location=location.name):
+                self.assertEqual(location.progress_type, expected)
+
+    def test_relic_keys_gate_quests(self) -> None:
+        self.collect_all_but(RELIC_KEY)
+        keys = self.get_items_by_name(RELIC_KEY)
+        names = self.location_names()
+        first_quests = [quest_location_name(k) for k in range(0, 40, 8) if quest_location_name(k) in names]
+        for held in range(len(keys) + 1):
+            for name in first_quests:
+                relic = LOCATION_TABLE[name].relic
+                with self.subTest(keys=held, relic=relic):
+                    self.assertEqual(self.can_reach_location(name), relic <= held + 1)
+            if held < len(keys):
+                self.collect(keys[held])
+
+
+class TestShort(LengthTestBase):
+    length = "short"
 
     def test_progression_share(self) -> None:
         pool = self.multiworld.itempool
         progression = [item for item in pool if item.classification & ItemClassification.progression]
-        share = len(progression) / len(pool)
-        self.assertGreaterEqual(share, MIN_PROGRESSION_SHARE,
-                                f"{len(progression)}/{len(pool)} = {share:.0%} progression")
+        self.assertGreaterEqual(len(progression) / len(pool), MIN_PROGRESSION_SHARE,
+                                f"{len(progression)}/{len(pool)} progression")
 
-    def test_skill_gates_off_removes_ice_storm_and_high_levels(self) -> None:
-        location_names = {location.name for location in self.multiworld.get_locations()}
+    def test_short_contents(self) -> None:
         self.assertNotIn("Ice Storm", {region.name for region in self.multiworld.get_regions()})
         self.assertFalse(self.get_items_by_name("Ice Storm Mode"))
-        for name in (level_location_name(9), level_location_name(10), badge("Glacial Explorer", "Bronze"),
-                     badge("Ice Breaker", "Bronze"), badge("Levelord"), badge("Top Secret")):
-            self.assertNotIn(name, location_names)
-        self.assertIn(level_location_name(8), location_names)
+        self.assertFalse(self.get_items_by_name(LEVEL_CAP))
+        self.assertFalse(self.get_items_by_name(BADGE_TIER))
+        self.assertEqual(len(self.get_items_by_name(RELIC_KEY)), 1)
+        self.assertEqual(len(self.get_items_by_name(JEWEL_SHARD)), 6)
+        names = self.location_names()
+        self.assertIn(level_location_name(5), names)
+        self.assertNotIn(level_location_name(6), names)
+        self.assertIn(quest_location_name(15), names)  # relic 2
+        self.assertNotIn(quest_location_name(16), names)  # relic 3
+        self.assertNotIn(badge("Stellar", "Bronze"), names)  # slow cumulative badge
+        self.assertNotIn(badge("Blaster", "Silver"), names)
+
+    def test_levels_2_to_5_need_nothing(self) -> None:
+        for level in range(2, 6):
+            self.assertTrue(self.can_reach_location(level_location_name(level)))
 
     def test_secret_modes_need_both_items(self) -> None:
         for secret, prerequisite, location in (("Butterflies Mode", "Zen Mode", badge("Butterfly Monarch", "Bronze")),
                                                ("Diamond Mine Mode", "Quest Mode", badge("Relic Hunter", "Bronze"))):
             for missing in (secret, prerequisite):
                 with self.subTest(location=location, missing=missing):
+                    self.multiworld.state = CollectionState(self.multiworld)
                     self.collect_all_but(missing)
                     self.assertFalse(self.can_reach_location(location))
                     self.collect_by_name(missing)
                     self.assertTrue(self.can_reach_location(location))
-                    self.multiworld.state = self.multiworld.state.__class__(self.multiworld)
 
-    def test_relic_keys_gate_quests(self) -> None:
-        self.collect_all_but(RELIC_KEY)
-        for keys in range(6):
-            for k in range(0, 40, 8):
-                relic = k // 8 + 1
-                with self.subTest(keys=keys, relic=relic):
-                    self.assertEqual(self.can_reach_location(quest_location_name(k)), relic <= keys)
-            if keys < 5:
-                self.collect(self.get_item_by_name(RELIC_KEY))
+    def test_shard_goal(self) -> None:
+        self.collect_all_but(JEWEL_SHARD)
+        shards = self.get_items_by_name(JEWEL_SHARD)
+        self.collect(shards[:4])
+        self.assertBeatable(False)
+        self.collect(shards[4])
+        self.assertBeatable(True)
 
-    def test_level_caps_gate_levels(self) -> None:
+
+class TestMedium(LengthTestBase):
+    length = "medium"
+    options: ClassVar[dict[str, Any]] = {"seed_length": "medium"}
+
+    def test_one_level_cap_opens_levels_6_to_8(self) -> None:
         self.collect_all_but(LEVEL_CAP)
-        caps = self.get_items_by_name(LEVEL_CAP)
-        self.assertEqual(len(caps), 3)  # skill gates off: levels up to 8 -> 3 caps
-        for held in range(len(caps) + 1):
-            for level in range(2, 9):
-                with self.subTest(caps=held, level=level):
-                    self.assertEqual(self.can_reach_location(level_location_name(level)), level <= 2 + 2 * held)
-            if held < len(caps):
-                self.collect(caps[held])
+        self.assertFalse(self.can_reach_location(level_location_name(6)))
+        self.collect_by_name(LEVEL_CAP)
+        self.assertTrue(self.can_reach_location(level_location_name(8)))
 
-    def test_badge_tiers_gate_badges(self) -> None:
+    def test_one_badge_tier_opens_silver(self) -> None:
         self.collect_all_but(BADGE_TIER)
         self.assertTrue(self.can_reach_location(badge("Blaster", "Bronze")))
         self.assertFalse(self.can_reach_location(badge("Blaster", "Silver")))
         self.collect_by_name(BADGE_TIER)
         self.assertTrue(self.can_reach_location(badge("Blaster", "Silver")))
 
-    def test_expert_and_luck_locations_are_excluded(self) -> None:
-        for location in self.multiworld.get_locations(self.player):
-            data = LOCATION_TABLE[location.name]
-            expected = LocationProgressType.EXCLUDED if data.excluded else LocationProgressType.DEFAULT
-            with self.subTest(location=location.name):
-                self.assertEqual(location.progress_type, expected)
-        self.assertEqual(self.world.get_location(badge("Annihilator")).progress_type, LocationProgressType.EXCLUDED)
-        self.assertEqual(self.world.get_location(badge("High Voltage", "Silver")).progress_type,
-                         LocationProgressType.EXCLUDED)
+    def test_luck_elites_are_filler_only(self) -> None:
+        for name in ("Annihilator", "Superstar"):
+            self.assertEqual(self.world.get_location(badge(name)).progress_type, LocationProgressType.EXCLUDED)
 
 
-class TestSkillGatesOn(Bejeweled3TestBase):
-    options: ClassVar[dict[str, Any]] = {
-        "include_skill_gates": True,
-        "include_elite_badges": ["Heroes Welcome", "Annihilator", "Superstar", "Levelord", "Top Secret"],
-    }
+class TestLong(LengthTestBase):
+    length = "long"
+    options: ClassVar[dict[str, Any]] = {"seed_length": "long"}
 
     def test_ice_storm_needs_lightning_and_its_item(self) -> None:
-        location = badge("Glacial Explorer", "Bronze")
-        self.collect_all_but("Ice Storm Mode")
-        self.assertFalse(self.can_reach_location(location))
-        self.collect_by_name("Ice Storm Mode")
-        self.assertTrue(self.can_reach_location(location))
+        location = badge("Ice Breaker", "Bronze")
+        for missing in ("Ice Storm Mode", "Lightning Mode"):
+            with self.subTest(missing=missing):
+                self.multiworld.state = CollectionState(self.multiworld)
+                self.collect_all_but(missing)
+                self.assertFalse(self.can_reach_location(location))
+
+    def test_levels_9_10_and_levelord_need_two_caps(self) -> None:
+        self.collect_all_but(LEVEL_CAP)
+        caps = self.get_items_by_name(LEVEL_CAP)
+        self.assertEqual(len(caps), 2)
+        self.collect(caps[0])
+        self.assertTrue(self.can_reach_location(level_location_name(8)))
+        self.assertFalse(self.can_reach_location(level_location_name(9)))
+        self.assertFalse(self.can_reach_location(badge("Levelord")))
+        self.collect(caps[1])
+        self.assertTrue(self.can_reach_location(level_location_name(10)))
+        self.assertTrue(self.can_reach_location(badge("Levelord")))
+
+    def test_gold_needs_two_tiers(self) -> None:
+        self.collect_all_but(BADGE_TIER)
+        tiers = self.get_items_by_name(BADGE_TIER)
+        self.assertEqual(len(tiers), 2)
+        self.collect(tiers[0])
+        self.assertFalse(self.can_reach_location(badge("Blaster", "Gold")))
+        self.collect(tiers[1])
+        self.assertTrue(self.can_reach_location(badge("Blaster", "Gold")))
+
+    def test_hard_checks_are_filler_only(self) -> None:
+        for name in (level_location_name(9), badge("High Voltage", "Bronze"), badge("Heroes Welcome")):
+            self.assertEqual(self.world.get_location(name).progress_type, LocationProgressType.EXCLUDED)
+
+
+class TestMarathon(LengthTestBase):
+    length = "marathon"
+    options: ClassVar[dict[str, Any]] = {"seed_length": "marathon", "starting_mode": "quest"}
+
+    def test_everything_present(self) -> None:
+        self.assertEqual(len(self.get_items_by_name(BADGE_TIER)), 3)
+        self.assertEqual(len(self.get_items_by_name(RELIC_KEY)), 4)
+        self.assertTrue(self.get_items_by_name("Classic Mode"))
+        self.assertFalse(self.get_items_by_name("Quest Mode"))
 
     def test_top_secret_needs_all_secret_modes(self) -> None:
         for missing in ("Poker Mode", "Butterflies Mode", "Ice Storm Mode", "Diamond Mine Mode"):
             with self.subTest(missing=missing):
-                self.multiworld.state = self.multiworld.state.__class__(self.multiworld)
+                self.multiworld.state = CollectionState(self.multiworld)
                 self.collect_all_but(missing)
                 self.assertFalse(self.can_reach_location(badge("Top Secret")))
-
-    def test_levels_9_and_10_need_four_caps(self) -> None:
-        self.assertEqual(len(self.get_items_by_name(LEVEL_CAP)), 4)
-        self.collect_all_but(LEVEL_CAP)
-        caps = self.get_items_by_name(LEVEL_CAP)
-        self.collect(caps[:3])
-        self.assertTrue(self.can_reach_location(level_location_name(8)))
-        self.assertFalse(self.can_reach_location(level_location_name(9)))
-        self.assertFalse(self.can_reach_location(badge("Levelord")))
-        self.collect(caps[3])
-        self.assertTrue(self.can_reach_location(level_location_name(10)))
-        self.assertTrue(self.can_reach_location(badge("Levelord")))
-
-
-class TestEverythingOn(Bejeweled3TestBase):
-    options: ClassVar[dict[str, Any]] = {
-        "goal": "heroes_welcome",
-        "max_badge_tier": "platinum",
-        "include_skill_gates": True,
-        "include_elite_badges": ["Heroes Welcome", "Annihilator", "Superstar", "Levelord", "Top Secret"],
-        "starting_mode": "zen",
-    }
-
-    def test_classic_is_an_item(self) -> None:
-        self.assertTrue(self.get_items_by_name("Classic Mode"))
-        self.assertFalse(self.get_items_by_name("Zen Mode"))
-        self.assertEqual(len(self.get_items_by_name(BADGE_TIER)), 3)
-
-    def test_heroes_goal_needs_all_relic_keys(self) -> None:
-        self.collect_all_but(RELIC_KEY)
-        keys = self.get_items_by_name(RELIC_KEY)
-        self.assertEqual(len(keys), 5)
-        self.collect(keys[:4])
-        self.assertBeatable(False)
-        self.collect(keys[4])
-        self.assertBeatable(True)
 
     def test_poker_needs_classic(self) -> None:
         self.collect_all_but("Classic Mode")
         self.assertFalse(self.can_reach_location(badge("Ante Up", "Bronze")))
 
 
-class TestMinimal(Bejeweled3TestBase):
-    options: ClassVar[dict[str, Any]] = {
-        "quest_locations": 0,
-        "max_badge_tier": "bronze",
-        "relic_keys": False,
-        "level_cap_items": False,
-        "badge_tier_items": False,
-        "include_elite_badges": [],
-        "shard_count": 30,
-        "shard_required": 30,
-    }
+class TestHeroesWelcomeOnShort(Bejeweled3TestBase):
+    options: ClassVar[dict[str, Any]] = {"goal": "heroes_welcome"}
 
-    def test_shards_clamped_to_room(self) -> None:
-        shards = len(self.get_items_by_name(JEWEL_SHARD))
-        self.assertEqual(shards, self.world.shard_count)
-        self.assertLess(shards, 30)
-        self.assertEqual(self.world.shard_required, shards)
-        self.assertEqual(len(self.multiworld.get_items()), len(self.multiworld.get_locations()))
-
-
-class TestShardMath(Bejeweled3TestBase):
-    options: ClassVar[dict[str, Any]] = {"shard_count": 10, "shard_required": 12}
-
-    def test_required_capped_and_enforced(self) -> None:
-        self.assertEqual(self.world.shard_count, 10)
-        self.assertEqual(self.world.shard_required, 10)
-        self.collect_all_but(JEWEL_SHARD)
-        shards = self.get_items_by_name(JEWEL_SHARD)
-        self.collect(shards[:9])
+    def test_goal_adds_and_needs_all_keys(self) -> None:
+        self.assertFalse(self.get_items_by_name(JEWEL_SHARD))
+        self.collect_all_but(RELIC_KEY)
+        keys = self.get_items_by_name(RELIC_KEY)
+        self.assertEqual(len(keys), 4)
+        self.collect(keys[:3])
         self.assertBeatable(False)
-        self.collect(shards[9])
+        self.collect(keys[3])
         self.assertBeatable(True)
 
 
-class TestLevelordGoalWithoutSkillGates(Bejeweled3TestBase):
+class TestLevelordOnShort(Bejeweled3TestBase):
     options: ClassVar[dict[str, Any]] = {"goal": "levelord"}
 
-    def test_goal_needs_four_caps(self) -> None:
-        self.assertEqual(len(self.get_items_by_name(LEVEL_CAP)), 4)
+    def test_goal_adds_and_needs_two_caps(self) -> None:
         self.collect_all_but(LEVEL_CAP)
         caps = self.get_items_by_name(LEVEL_CAP)
-        self.collect(caps[:3])
+        self.assertEqual(len(caps), 2)
+        self.collect(caps[0])
         self.assertBeatable(False)
-        self.collect(caps[3])
+        self.collect(caps[1])
         self.assertBeatable(True)
 
 
 class TestOptionSweep(Bejeweled3TestBase):
-    """Every combination of the structural options generates, balances and is beatable with all items."""
+    """Every option combination generates, balances, starts wide and is beatable with all items (3 seeds each)."""
     run_default_tests = False
 
     def test_combinations(self) -> None:
         grid = {
+            "seed_length": ["short", "medium", "long", "marathon"],
             "goal": ["shard_hunt", "levelord", "heroes_welcome"],
-            "include_skill_gates": [False, True],
-            "max_badge_tier": ["bronze", "silver", "gold", "platinum"],
-            "relic_keys": [False, True],
-            "level_cap_items": [False, True],
-            "badge_tier_items": [False, True],
-            "quest_locations": [0, 1, 5],
-            "starting_mode": ["classic", "zen", "lightning", "quest"],
+            "starting_mode": ["classic", "quest"],
         }
         for values in itertools.product(*grid.values()):
             options = dict(zip(grid, values, strict=True))
-            with self.subTest(**options):
-                multiworld = setup_multiworld(Bejeweled3World, gen_steps, seed=0, options=options)
-                self.assertEqual(len(multiworld.itempool), len(multiworld.get_locations()))
-                state = multiworld.get_all_state()
-                self.assertTrue(multiworld.can_beat_game(state))
+            for seed in range(3):
+                with self.subTest(**options, seed=seed):
+                    multiworld = setup_multiworld(Bejeweled3World, gen_steps, seed=seed, options=options)
+                    self.assertEqual(len(multiworld.itempool), len(multiworld.get_locations()))
+                    self.assertTrue(multiworld.can_beat_game(multiworld.get_all_state()))
+                    start = CollectionState(multiworld)
+                    open_checks = [location for location in multiworld.get_locations()
+                                   if location.progress_type != LocationProgressType.EXCLUDED
+                                   and location.can_reach(start)]
+                    self.assertGreaterEqual(len(open_checks), MIN_SPHERE_ZERO)
 
 
 class TestIdsStable(Bejeweled3TestBase):

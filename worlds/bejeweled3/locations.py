@@ -5,8 +5,9 @@ Sources (see docs/memory_map.md and docs/BALANCE.md):
 - badge ids/names/order: badge objects in memory + the in-game Badges screen (Steam 1.1.12.4196)
 - tier thresholds: properties\\badges.txt inside main.pak
 - quest names/order: properties\\quest.cfg inside main.pak (5 relics x 8 quests)
-- difficulty ratings (E/M/H/X): judgement, refined by playtesting (BALANCE.md)
+- difficulty ratings (E/M/H/X) and seed lengths: judgement, refined by playtesting (BALANCE.md)
 
+Every location has a **seed length**: the shortest Seed Length (Short/Medium/Long/Marathon) that includes it.
 IDs are part of the datapackage: never renumber a released location.
 """
 from __future__ import annotations
@@ -39,8 +40,14 @@ ALL_MODES = BASE_MODES + SECRET_MODES
 
 TIER_NAMES = {1: "Bronze", 2: "Silver", 3: "Gold", 4: "Platinum"}
 
-# Difficulty ratings: E easy, M medium, H hard, X expert/grind (X locations are EXCLUDED: filler only).
+# Seed lengths (values of the SeedLength option).
+SHORT, MEDIUM_LENGTH, LONG, MARATHON = 1, 2, 3, 4
+ICE_STORM_LENGTH = LONG  # Ice Storm is unlocked in game by 100,000 in Lightning: a skill gate
+
+# Difficulty ratings: E easy, M medium, H hard, X expert/grind. H and X locations are EXCLUDED (filler only),
+# so nobody else in the multiworld ever waits on them.
 EASY, MEDIUM, HARD, EXPERT = "E", "M", "H", "X"
+FILLER_ONLY_RATINGS = frozenset({HARD, EXPERT})
 
 
 @dataclass(frozen=True)
@@ -49,40 +56,41 @@ class Badge:
     name: str
     mode: str | None  # region where it's earned; None = any mode (placed in Menu)
     ratings: tuple[str, ...]  # one per tier (common: 4, elite: 1)
-    luck: bool = False  # can't be forced by skill -> always EXCLUDED
+    lengths: tuple[int, ...]  # shortest seed length that includes each tier
+    luck: bool = False  # can't be forced by skill -> always filler only
 
     @property
     def elite(self) -> bool:
         return len(self.ratings) == 1
 
 
+S, M, L, X4 = SHORT, MEDIUM_LENGTH, LONG, MARATHON
 COMMON_BADGES = (
-    Badge(0, "Inferno", None, (EASY, MEDIUM, HARD, EXPERT)),  # 50/400/1400/3400 Flame Gems, cumulative
-    Badge(1, "Stellar", None, (MEDIUM, HARD, EXPERT, EXPERT)),  # 25/150/550/1300 Star Gems, cumulative
-    Badge(2, "Chromatic", None, (MEDIUM, HARD, EXPERT, EXPERT)),  # 25/150/550/1300 Hypercubes, cumulative
-    Badge(3, "Blaster", None, (EASY, EASY, MEDIUM, HARD)),  # 30/40/50/60 gems in one move
-    Badge(4, "Bejeweler", CLASSIC, (MEDIUM, HARD, EXPERT, EXPERT)),  # 50k/150k/300k/500k one Classic game
-    Badge(5, "Final Frenzy", LIGHTNING, (MEDIUM, MEDIUM, HARD, EXPERT)),  # 20k/30k/40k/60k in a Last Hurrah
-    Badge(6, "High Voltage", LIGHTNING, (HARD, EXPERT, EXPERT, EXPERT)),  # 100k/300k/500k/750k Lightning
-    Badge(7, "Ante Up", POKER, (MEDIUM, HARD, EXPERT, EXPERT)),  # 100k/300k/500k/750k Poker
-    Badge(8, "The Gambler", POKER, (MEDIUM, MEDIUM, HARD, HARD)),  # 10/30/60/100 flushes
-    Badge(9, "Glacial Explorer", ICE_STORM, (HARD, EXPERT, EXPERT, EXPERT)),  # 100k/300k/500k/750k Ice Storm
-    Badge(10, "Ice Breaker", ICE_STORM, (MEDIUM, HARD, EXPERT, EXPERT)),  # x5/x8/x12/x15 column combo
-    Badge(11, "Diamond, Mine", DIAMOND_MINE, (MEDIUM, HARD, EXPERT, EXPERT)),  # 100k/300k/500k/750k
-    Badge(12, "Relic Hunter", DIAMOND_MINE, (MEDIUM, HARD, EXPERT, EXPERT)),  # 5/8/12/15 artifacts
-    Badge(13, "Butterfly Monarch", BUTTERFLIES, (MEDIUM, HARD, EXPERT, EXPERT)),  # 100k/300k/500k/750k
-    Badge(14, "Butterfly Bonanza", BUTTERFLIES, (MEDIUM, HARD, EXPERT, EXPERT)),  # 4/6/8/10 in one move
+    # thresholds B/S/G/P from badges.txt
+    Badge(0, "Inferno", None, (EASY, MEDIUM, HARD, EXPERT), (S, M, L, X4)),  # 50/400/1400/3400 Flame Gems
+    Badge(1, "Stellar", None, (MEDIUM, HARD, EXPERT, EXPERT), (M, L, X4, X4)),  # 25/150/550/1300 Star Gems
+    Badge(2, "Chromatic", None, (MEDIUM, HARD, EXPERT, EXPERT), (M, L, X4, X4)),  # 25/150/550/1300 Hypercubes
+    Badge(3, "Blaster", None, (EASY, EASY, MEDIUM, HARD), (S, M, L, X4)),  # 30/40/50/60 gems in one move
+    Badge(4, "Bejeweler", CLASSIC, (MEDIUM, HARD, EXPERT, EXPERT), (S, L, X4, X4)),  # 50k/150k/300k/500k
+    Badge(5, "Final Frenzy", LIGHTNING, (MEDIUM, MEDIUM, HARD, EXPERT), (S, M, L, X4)),  # 20k/30k/40k/60k
+    Badge(6, "High Voltage", LIGHTNING, (HARD, EXPERT, EXPERT, EXPERT), (L, L, X4, X4)),  # 100k/300k/500k/750k
+    Badge(7, "Ante Up", POKER, (MEDIUM, HARD, EXPERT, EXPERT), (S, L, X4, X4)),  # 100k/300k/500k/750k
+    Badge(8, "The Gambler", POKER, (MEDIUM, MEDIUM, HARD, HARD), (S, M, L, X4)),  # 10/30/60/100 flushes
+    Badge(9, "Glacial Explorer", ICE_STORM, (HARD, EXPERT, EXPERT, EXPERT), (L, L, X4, X4)),  # 100k..750k
+    Badge(10, "Ice Breaker", ICE_STORM, (MEDIUM, HARD, EXPERT, EXPERT), (L, L, X4, X4)),  # x5/x8/x12/x15
+    Badge(11, "Diamond, Mine", DIAMOND_MINE, (MEDIUM, HARD, EXPERT, EXPERT), (S, L, X4, X4)),  # 100k..750k
+    Badge(12, "Relic Hunter", DIAMOND_MINE, (MEDIUM, HARD, EXPERT, EXPERT), (S, L, X4, X4)),  # 5/8/12/15
+    Badge(13, "Butterfly Monarch", BUTTERFLIES, (MEDIUM, HARD, EXPERT, EXPERT), (S, L, X4, X4)),  # 100k..750k
+    Badge(14, "Butterfly Bonanza", BUTTERFLIES, (MEDIUM, HARD, EXPERT, EXPERT), (S, L, X4, X4)),  # 4/6/8/10
 )
 
 ELITE_BADGES = (
-    Badge(15, "Heroes Welcome", QUEST, (HARD,)),  # complete Quest mode
-    Badge(16, "Annihilator", None, (HARD,), luck=True),  # swap two Hypercubes
-    Badge(17, "Superstar", None, (HARD,), luck=True),  # line up 6 gems in a row
-    Badge(18, "Levelord", CLASSIC, (HARD,)),  # Classic level 10 (a skill gate)
-    Badge(19, "Top Secret", None, (EXPERT,)),  # 300k in all four secret modes (a skill gate)
+    Badge(15, "Heroes Welcome", QUEST, (HARD,), (L,)),  # complete Quest mode
+    Badge(16, "Annihilator", None, (HARD,), (M,), luck=True),  # swap two Hypercubes
+    Badge(17, "Superstar", None, (HARD,), (M,), luck=True),  # line up 6 gems in a row
+    Badge(18, "Levelord", CLASSIC, (HARD,), (L,)),  # Classic level 10
+    Badge(19, "Top Secret", None, (EXPERT,), (X4,)),  # 300k in all four secret modes
 )
-ELITE_BADGE_NAMES = tuple(badge.name for badge in ELITE_BADGES)
-SKILL_GATED_ELITES = frozenset({"Levelord", "Top Secret"})
 
 QUEST_NAMES = (
     # relic 1
@@ -102,11 +110,12 @@ QUEST_NAMES = (
 QUESTS_PER_RELIC = 8
 RELIC_COUNT = 5
 assert len(QUEST_NAMES) == QUESTS_PER_RELIC * RELIC_COUNT
+RELIC_LENGTHS = {1: S, 2: S, 3: M, 4: L, 5: L}
 
 MIN_CHECK_LEVEL = 2
 MAX_LEVEL = 10
-SKILL_GATED_MIN_LEVEL = 9  # levels 9 and 10 need include_skill_gates
 LEVEL_RATINGS = {2: EASY, 3: EASY, 4: EASY, 5: MEDIUM, 6: MEDIUM, 7: MEDIUM, 8: HARD, 9: HARD, 10: HARD}
+LEVEL_LENGTHS = {2: S, 3: S, 4: S, 5: S, 6: M, 7: M, 8: M, 9: L, 10: L}
 
 
 @dataclass(frozen=True)
@@ -116,6 +125,7 @@ class LocationData:
     region: str
     kind: str  # "level" | "quest" | "badge"
     rating: str
+    length: int  # shortest seed length that includes this location
     level: int = 0  # kind == "level"
     quest_index: int = -1  # kind == "quest"
     relic: int = 0  # kind == "quest", 1-based
@@ -123,8 +133,8 @@ class LocationData:
     tier: int = 0  # kind == "badge", 1-based (elite: 1)
 
     @property
-    def excluded(self) -> bool:
-        return self.rating == EXPERT or (self.badge is not None and self.badge.luck)
+    def filler_only(self) -> bool:
+        return self.rating in FILLER_ONLY_RATINGS or (self.badge is not None and self.badge.luck)
 
 
 def level_location_name(level: int) -> str:
@@ -144,19 +154,19 @@ def badge_location_name(badge: Badge, tier: int) -> str:
 def _build_table() -> dict[str, LocationData]:
     table = [
         LocationData(level_location_name(level), BASE_ID + LEVEL_BLOCK + level, CLASSIC, "level",
-                     LEVEL_RATINGS[level], level=level)
+                     LEVEL_RATINGS[level], LEVEL_LENGTHS[level], level=level)
         for level in range(MIN_CHECK_LEVEL, MAX_LEVEL + 1)
     ]
     table += [
         LocationData(quest_location_name(k), BASE_ID + QUEST_BLOCK + k, QUEST, "quest", MEDIUM,
-                     quest_index=k, relic=k // QUESTS_PER_RELIC + 1)
+                     RELIC_LENGTHS[k // QUESTS_PER_RELIC + 1], quest_index=k, relic=k // QUESTS_PER_RELIC + 1)
         for k in range(len(QUEST_NAMES))
     ]
     table += [
         LocationData(badge_location_name(badge, tier), BASE_ID + BADGE_BLOCK + badge.badge_id * 10 + tier,
-                     badge.mode or MENU, "badge", rating, badge=badge, tier=tier)
+                     badge.mode or MENU, "badge", rating, length, badge=badge, tier=tier)
         for badge in COMMON_BADGES + ELITE_BADGES
-        for tier, rating in enumerate(badge.ratings, start=1)
+        for tier, (rating, length) in enumerate(zip(badge.ratings, badge.lengths, strict=True), start=1)
     ]
     return {data.name: data for data in table}
 
@@ -174,35 +184,32 @@ LOCATION_NAME_GROUPS = {
 }
 
 
+def max_relic(length: int) -> int:
+    return max(relic for relic, relic_length in RELIC_LENGTHS.items() if relic_length <= length)
+
+
+def max_level(length: int) -> int:
+    return max(level for level, level_length in LEVEL_LENGTHS.items() if level_length <= length)
+
+
+def max_common_tier(length: int) -> int:
+    return max(tier for badge in COMMON_BADGES for tier, tier_length in enumerate(badge.lengths, start=1)
+               if tier_length <= length)
+
+
 class Bejeweled3Location(Location):
     game = GAME_NAME
 
 
-def is_location_enabled(world: Bejeweled3World, data: LocationData) -> bool:
-    options = world.options
-    skill_gates = bool(options.include_skill_gates)
-    if data.region == ICE_STORM and not skill_gates:
-        return False
-    if data.kind == "level":
-        return data.level < SKILL_GATED_MIN_LEVEL or skill_gates
-    if data.kind == "quest":
-        return data.relic <= options.quest_locations.value
-    assert data.badge is not None
-    if data.badge.elite:
-        if data.badge.name not in options.include_elite_badges.value:
-            return False
-        return data.badge.name not in SKILL_GATED_ELITES or skill_gates
-    return data.tier <= options.max_badge_tier.value
-
-
 def enabled_locations(world: Bejeweled3World) -> list[LocationData]:
-    return [data for data in LOCATION_TABLE.values() if is_location_enabled(world, data)]
+    length = world.options.seed_length.value
+    return [data for data in LOCATION_TABLE.values() if data.length <= length]
 
 
 def create_all_locations(world: Bejeweled3World) -> None:
     for data in enabled_locations(world):
         region = world.get_region(data.region)
         location = Bejeweled3Location(world.player, data.name, data.address, region)
-        if data.excluded:
+        if data.filler_only:
             location.progress_type = LocationProgressType.EXCLUDED
         region.locations.append(location)

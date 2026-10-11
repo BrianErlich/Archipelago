@@ -1,17 +1,39 @@
 from dataclasses import dataclass
 
-from Options import Choice, DefaultOnToggle, OptionGroup, OptionSet, PerGameCommonOptions, Range, Toggle
+from Options import Choice, OptionGroup, PerGameCommonOptions
 
-from .locations import ELITE_BADGE_NAMES
+
+class SeedLength(Choice):
+    """
+    How long your Bejeweled 3 slot takes, like ordering fries in a size. Everything scales with it:
+    which checks exist, the gating items, and the Jewel Shards for the Shard Hunt goal.
+
+    Short (default): about 3 hours. Seven modes, Classic levels 2-5, relics 1-2 (16 quests), quick Bronze badges.
+    Medium: about 8 hours. Adds levels 6-8, relic 3, every Bronze badge, quick Silvers, Annihilator and Superstar.
+    Long: about 20 hours. Adds levels 9-10, all 40 quests, Ice Storm, every Silver, reachable Golds,
+          Heroes Welcome and Levelord.
+    Marathon: 100+ hours, for veterans. Every badge tier including Platinum, plus Top Secret.
+
+    Hard and expert checks only ever hold filler, so nobody else in the multiworld waits on them.
+    The hours are estimates for an experienced casual player.
+    """
+    display_name = "Seed Length"
+    option_short = 1
+    option_medium = 2
+    option_long = 3
+    option_marathon = 4
+    default = option_short
 
 
 class Goal(Choice):
     """
     What you need to do to finish your slot.
 
-    Shard Hunt: collect a number of Jewel Shards from the multiworld. Doesn't depend on in-game skill.
-    Levelord: reach level 10 in a single Classic game (requires all Progressive Level Caps if those are on).
-    Heroes Welcome: complete Quest mode (requires all five Relic Keys if those are on). This takes several hours.
+    Shard Hunt: collect Jewel Shards from the multiworld (how many depends on Seed Length). Needs no in-game skill.
+    Levelord: reach level 10 in a single Classic game.
+    Heroes Welcome: complete Quest mode. This takes several hours, even on a Short seed.
+
+    The goal adds whatever gating items it needs (Level Caps for Levelord, Relic Keys for Heroes Welcome).
     """
     display_name = "Goal"
     option_shard_hunt = 0
@@ -20,126 +42,28 @@ class Goal(Choice):
     default = option_shard_hunt
 
 
-class ShardCount(Range):
-    """
-    Shard Hunt only: how many Jewel Shards are in the item pool.
-    Lowered automatically if your slot doesn't have enough locations to hold them.
-    """
-    display_name = "Jewel Shard Count"
-    range_start = 1
-    range_end = 30
-    default = 10
-
-
-class ShardRequired(Range):
-    """
-    Shard Hunt only: how many Jewel Shards you need to finish. Capped at the Jewel Shard Count.
-    """
-    display_name = "Jewel Shards Required"
-    range_start = 1
-    range_end = 30
-    default = 7
-
-
 class StartingMode(Choice):
     """
-    The game mode you can send checks from at the start. The other base modes become items.
-    Secret modes (Poker, Butterflies, Ice Storm, Diamond Mine) can't be the starting mode,
-    because each one also has to be unlocked in game first.
+    The game mode you can send checks from at the start. The other modes become items.
+
+    Classic: start with Classic levels and badges.
+    Quest: start with the first relic's eight quests.
+
+    Zen and Lightning have too few checks of their own to start a seed with.
     """
     display_name = "Starting Mode"
-    option_classic = 0
-    option_zen = 1
-    option_lightning = 2
+    option_classic = 0  # values index BASE_MODES (Classic, Zen, Lightning, Quest)
     option_quest = 3
     default = option_classic
 
 
-class RelicKeys(DefaultOnToggle):
-    """
-    Adds progressive Relic Keys. Quest checks in relic N only count once you hold N Relic Keys.
-    Keys don't skip anything in game: relic N+1 still opens only after you finish 4 quests of relic N.
-    """
-    display_name = "Relic Keys"
-
-
-class LevelCapItems(DefaultOnToggle):
-    """
-    Adds Progressive Level Caps. "Reach Level N" checks above the cap don't count.
-    The cap starts at level 2 and each Progressive Level Cap raises it by 2.
-    """
-    display_name = "Progressive Level Caps"
-
-
-class BadgeTierItems(DefaultOnToggle):
-    """
-    Adds Progressive Badge Tiers. Bronze badge checks always count;
-    each Progressive Badge Tier enables the next tier (Silver, then Gold, then Platinum).
-    """
-    display_name = "Progressive Badge Tiers"
-
-
-class MaxBadgeTier(Choice):
-    """
-    The highest tier of the 15 common badges that becomes a check.
-    Gold and especially Platinum need expert play or a lot of grinding;
-    expert-level checks only ever hold filler, so nobody else waits on them.
-    """
-    display_name = "Max Badge Tier"
-    option_bronze = 1
-    option_silver = 2
-    option_gold = 3
-    option_platinum = 4
-    default = option_silver
-
-
-class IncludeEliteBadges(OptionSet):
-    """
-    Which elite badges become checks.
-    Annihilator, Superstar and Top Secret depend on luck or expert play, so they only ever hold filler.
-    Levelord and Top Secret also need Include Skill Gates.
-    """
-    display_name = "Include Elite Badges"
-    valid_keys = frozenset(ELITE_BADGE_NAMES)
-    default = frozenset({"Heroes Welcome", "Levelord", "Annihilator", "Superstar"})
-
-
-class IncludeSkillGates(Toggle):
-    """
-    Includes content that needs real skill to unlock or reach:
-    the Ice Storm mode (unlocked in game by scoring 100,000 in Lightning) with its badges,
-    "Reach Level 9" and "Reach Level 10", the Levelord badge, and the Top Secret badge.
-    """
-    display_name = "Include Skill Gates"
-
-
-class QuestLocations(Range):
-    """
-    How many relics' quests are checks (8 quests per relic). 5 = all 40 quests, 0 = no quest checks.
-    """
-    display_name = "Quest Locations (Relics)"
-    range_start = 0
-    range_end = 5
-    default = 5
-
-
 @dataclass
 class Bejeweled3Options(PerGameCommonOptions):
+    seed_length: SeedLength
     goal: Goal
-    shard_count: ShardCount
-    shard_required: ShardRequired
     starting_mode: StartingMode
-    relic_keys: RelicKeys
-    level_cap_items: LevelCapItems
-    badge_tier_items: BadgeTierItems
-    max_badge_tier: MaxBadgeTier
-    include_elite_badges: IncludeEliteBadges
-    include_skill_gates: IncludeSkillGates
-    quest_locations: QuestLocations
 
 
 option_groups = [
-    OptionGroup("Goal", [Goal, ShardCount, ShardRequired]),
-    OptionGroup("Progression", [StartingMode, RelicKeys, LevelCapItems, BadgeTierItems]),
-    OptionGroup("Locations", [MaxBadgeTier, IncludeEliteBadges, IncludeSkillGates, QuestLocations]),
+    OptionGroup("Bejeweled 3", [SeedLength, Goal, StartingMode]),
 ]

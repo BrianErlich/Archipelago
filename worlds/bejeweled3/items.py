@@ -21,10 +21,16 @@ from .locations import (
     BASE_MODES,
     GAME_NAME,
     ICE_STORM,
+    ICE_STORM_LENGTH,
+    LONG,
+    MARATHON,
     MAX_LEVEL,
-    MIN_CHECK_LEVEL,
+    MEDIUM_LENGTH,
     RELIC_COUNT,
-    SKILL_GATED_MIN_LEVEL,
+    SHORT,
+    max_common_tier,
+    max_level,
+    max_relic,
 )
 
 if TYPE_CHECKING:
@@ -36,7 +42,12 @@ BADGE_TIER = "Progressive Badge Tier"
 JEWEL_SHARD = "Jewel Shard"
 SPARKLE = "Sparkle"
 
-LEVELS_PER_CAP = 2
+# Levels up to FREE_LEVEL always count; each Progressive Level Cap raises the cap by LEVELS_PER_CAP (5 -> 8 -> 10).
+FREE_LEVEL = 5
+LEVELS_PER_CAP = 3
+
+# Shard Hunt: (Jewel Shards in the pool, Jewel Shards required) per seed length.
+SHARDS_BY_LENGTH = {SHORT: (6, 5), MEDIUM_LENGTH: (10, 8), LONG: (15, 12), MARATHON: (20, 16)}
 
 
 def mode_item_name(mode: str) -> str:
@@ -73,8 +84,13 @@ class Bejeweled3Item(Item):
 
 
 def caps_needed_for_level(level: int) -> int:
-    """Progressive Level Caps needed before "Reach Level <level>" counts (the cap starts at level 2)."""
-    return math.ceil(max(0, level - MIN_CHECK_LEVEL) / LEVELS_PER_CAP)
+    """Progressive Level Caps needed before "Reach Level <level>" counts."""
+    return math.ceil(max(0, level - FREE_LEVEL) / LEVELS_PER_CAP)
+
+
+def keys_needed_for_relic(relic: int) -> int:
+    """Relic Keys needed before relic <relic>'s quests count (relic 1 is free)."""
+    return relic - 1
 
 
 def starting_mode_name(world: Bejeweled3World) -> str:
@@ -82,32 +98,31 @@ def starting_mode_name(world: Bejeweled3World) -> str:
 
 
 def relic_key_count(world: Bejeweled3World) -> int:
-    if not world.options.relic_keys:
-        return 0
+    top_relic = max_relic(world.options.seed_length.value)
     if world.options.goal == world.options.goal.option_heroes_welcome:
-        return RELIC_COUNT
-    return world.options.quest_locations.value
+        top_relic = RELIC_COUNT
+    return keys_needed_for_relic(top_relic)
 
 
 def level_cap_count(world: Bejeweled3World) -> int:
-    if not world.options.level_cap_items:
-        return 0
-    top_level = MAX_LEVEL
-    if not world.options.include_skill_gates and world.options.goal != world.options.goal.option_levelord:
-        top_level = SKILL_GATED_MIN_LEVEL - 1
+    top_level = max_level(world.options.seed_length.value)
+    if world.options.goal == world.options.goal.option_levelord:
+        top_level = MAX_LEVEL
     return caps_needed_for_level(top_level)
 
 
 def badge_tier_count(world: Bejeweled3World) -> int:
-    if not world.options.badge_tier_items:
-        return 0
-    return world.options.max_badge_tier.value - 1
+    return max_common_tier(world.options.seed_length.value) - 1
+
+
+def shard_counts(world: Bejeweled3World) -> tuple[int, int]:
+    return SHARDS_BY_LENGTH[world.options.seed_length.value]
 
 
 def mode_items(world: Bejeweled3World) -> list[str]:
     start = starting_mode_name(world)
-    return [mode_item_name(mode) for mode in ALL_MODES
-            if mode != start and (mode != ICE_STORM or world.options.include_skill_gates)]
+    has_ice_storm = world.options.seed_length.value >= ICE_STORM_LENGTH
+    return [mode_item_name(mode) for mode in ALL_MODES if mode != start and (mode != ICE_STORM or has_ice_storm)]
 
 
 def create_item_with_classification(world: Bejeweled3World, name: str) -> Bejeweled3Item:
@@ -128,4 +143,3 @@ def create_all_items(world: Bejeweled3World) -> None:
     assert free >= 0, "generate_early must guarantee the pool fits"
     pool += [world.create_filler() for _ in range(free)]
     world.multiworld.itempool += pool
-
