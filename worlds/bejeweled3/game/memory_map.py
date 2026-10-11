@@ -25,9 +25,11 @@ class MemoryMap:
     quests_done: int  # Profile + : u8[40], quest.cfg order              verified with quests 4..7
     quest_count: int
     board_offset: int  # Bej3App -> Board* (0 when no board)              verified (Classic + menu)
-    board_score: int  # Board + : i32                                     verified (Classic)
-    board_level: int  # Board + : i32, 0-based                            verified (Classic)
-    board_classes: frozenset[str]  # RTTI names accepted as a board; mode mapping verified in Phase 2
+    board_score: int  # Board + : i32, live score                         verified (Classic, Diamond Mine)
+    board_level: int  # Board + : i32, 0-based                            verified (Classic, Zen)
+    # Every board class in the exe -> the mode it belongs to (None = mapping not verified yet; only used for
+    # display). A board whose class isn't listed here is treated as an unreadable tick.
+    board_modes: dict[str, str | None]
 
 
 STEAM_1_1_12_4196 = MemoryMap(
@@ -43,13 +45,27 @@ STEAM_1_1_12_4196 = MemoryMap(
     quests_done=0x158,
     quest_count=40,
     board_offset=0xBE8,
-    board_score=0xD24,
+    board_score=0xC88,  # +0xD24 equals it in Classic/Zen/Lightning but lags until game end on DigBoard
     board_level=0xE04,
-    # Only ClassicBoard has been observed; the others are RTTI classes present in the exe (UNVERIFIED mapping).
-    board_classes=frozenset({
-        ".?AVClassicBoard@Sexy@@", ".?AVZenBoard@Sexy@@", ".?AVSpeedBoard@Sexy@@", ".?AVQuestBoard@Sexy@@",
-        ".?AVPokerBoard@Sexy@@", ".?AVButterflyBoard@Sexy@@", ".?AVInfernoBoard@Sexy@@", ".?AVDigBoard@Sexy@@",
-    }),
+    board_modes={
+        ".?AVClassicBoard@Sexy@@": "Classic",  # verified 2026-10-10
+        ".?AVZenBoard@Sexy@@": "Zen",  # verified 2026-10-11
+        ".?AVSpeedBoard@Sexy@@": "Lightning",  # verified 2026-10-11
+        ".?AVPokerBoard@Sexy@@": None,
+        ".?AVButterflyBoard@Sexy@@": "Butterflies",  # seen in the Butterflies *quest*; the mode is still locked
+        ".?AVInfernoBoard@Sexy@@": None,
+        ".?AVDigBoard@Sexy@@": "Diamond Mine",  # verified 2026-10-11 (dig quests may use it too)
+        ".?AVQuestBoard@Sexy@@": None,
+        ".?AVBadMoveLimitBoard@Sexy@@": None,
+        ".?AVBalanceBoard@Sexy@@": None,
+        ".?AVFillerBoard@Sexy@@": None,
+        ".?AVMoveLimitBoard@Sexy@@": None,
+        ".?AVNoLoseBoard@Sexy@@": None,
+        ".?AVRealTimeBombBoard@Sexy@@": None,
+        ".?AVTimeBombBoard@Sexy@@": None,
+        ".?AVTimeLimitBoard@Sexy@@": "Quest",  # verified 2026-10-11 (Alchemy quest)
+        ".?AVBoard@Sexy@@": None,
+    },
 )
 
 MEMORY_MAPS: dict[str, MemoryMap] = {

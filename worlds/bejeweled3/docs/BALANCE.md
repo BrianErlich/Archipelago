@@ -30,11 +30,11 @@ Ratings: **E** easy — comes with normal play in the first hour or two · **M**
 | 5 | Final Frenzy (Last Hurrah, Lightning) | 1 game | 20k | 30k | 40k | 60k | M / M / H / X |
 | 6 | High Voltage (Lightning score) | 1 game | 100k | 300k | 500k | 750k | H / X / X / X |
 | 7 | Ante Up (Poker score) | 1 game | 100k | 300k | 500k | 750k | M / H / X / X |
-| 8 | The Gambler (Poker flushes) | cum.? | 10 | 30 | 60 | 100 | M / M / H / H |
+| 8 | The Gambler (Poker flushes) | cum. (tooltip counter 0/10, verified) | 10 | 30 | 60 | 100 | M / M / H / H |
 | 9 | Glacial Explorer (Ice Storm score) | 1 game | 100k | 300k | 500k | 750k | H / X / X / X |
 | 10 | Ice Breaker (Ice Storm column combo) | 1 game | x5 | x8 | x12 | x15 | M / H / X / X |
 | 11 | Diamond, Mine (DM score) | 1 game | 100k | 300k | 500k | 750k | M / H / X / X |
-| 12 | Relic Hunter (DM artifacts) | 1 game? | 5 | 8 | 12 | 15 | M / H / X / X |
+| 12 | Relic Hunter (DM artifacts) | 1 game (no tooltip counter; likely) | 5 | 8 | 12 | 15 | M / H / X / X |
 | 13 | Butterfly Monarch (Butterflies score) | 1 game | 100k | 300k | 500k | 750k | M / H / X / X |
 | 14 | Butterfly Bonanza (butterflies in one move) | 1 move, luck | 4 | 6 | 8 | 10 | M / H / X / X |
 | 15 | Heroes Welcome | quest | complete Quest mode | — | — | — | H (long) |

@@ -161,3 +161,21 @@ Badge objects in memory (20, found by vtable; vtables are static in `.rdata`, e.
 - 2026-10-10 — Static analysis of `Bejeweled3.exe` (Steam 1.1.12.4196): version, PE layout, ASLR off, redstone RVA in `.rdata`, RTTI classes, save-path strings. Probe written; tested on a throwaway 32-bit process and synthetic memory, not yet against the game.
 - 2026-10-10 (evening, Brian running the probe) — score scan led to Profile (+0xC4 lifetime points); `objtree` found the board at Bej3App+0xBE8; score `+D24`, level `+E04` verified with `watch`; saves found in `%LOCALAPPDATA%`.
 - 2026-10-11 (Claude via computer use + Brian playing) — active-profile name verified across a switch and a restart; badge table read from the game UI; Blaster Silver → badge array at Profile+0x1A0 / file 0xB8; quit forced a profile.dat write; Avalanche + Buried Treasure → quest array at Profile+0x158 / file 0x118; quest order extracted from main.pak.
+
+## Phase 2 verification (2026-10-11, subagent via computer use + read-only probe, profile AP1PROBE)
+
+| Mode / board | RTTI class | Score | Level `+E04` | Board pointer 0 after leaving |
+|---|---|---|---|---|
+| Classic | `ClassicBoard` | `+D24` = `+C88` = on-screen (6,890) | 1 at on-screen level 2 | yes |
+| Zen | `ZenBoard` | `+D24` = on-screen (14,180…14,380) | **3 at on-screen level 4 → 0-based, same offset as Classic** | yes |
+| Lightning | `SpeedBoard` | `+D24` = on-screen (1,500) | 0 | yes |
+| Quest "Butterflies" (relic 1) | `ButterflyBoard` | 0; this quest shows no score | 0 | yes |
+| Quest "Alchemy" (relic 1) | `TimeLimitBoard` | 0 ("0 of 64" on screen) | 0 | yes |
+| Diamond Mine | `DigBoard` | **`+D24` stays 0 during play** and is only set at TIME UP. The live score $4,000 was at `+C88`, `+CE8` and `+E00` | 0 | yes |
+
+- **Score offset changed to `+C88`.** It equals the instant score in Classic (verified 2026-10-10) and is live in Diamond Mine. It's assumed for Zen and Lightning, where `+D24` was checked instead. Score is only used for the board-session guard and `/bj3 status`.
+- Quest boards use mode-style classes (`ButterflyBoard`, `TimeLimitBoard`), not one `QuestBoard`, so a board class doesn't identify the mode uniquely. That's harmless: only `ClassicBoard` drives checks (levels).
+- Poker, Butterflies and Ice Storm are still locked on AP1PROBE, so `PokerBoard`, the Butterflies mode board and `InfernoBoard` (Ice Storm?) remain unverified.
+- **Profile name short-string path: still not exercised.** The new profile `AP3` (3 chars) read correctly, but its `std::wstring` reused AP1PROBE's heap buffer (capacity 15). The inline case (capacity 7) probably needs a game restart with a short-named profile active.
+- **The Profile object is edited in place on a profile switch** (same address, `0B0CC150`), which confirms the 2026-10-11 note.
+- **The Gambler's tooltip shows a counter `(0/10)`, so it's cumulative.** Relic Hunter has no counter and is probably per-game (one Diamond Mine game with 0 artifacts didn't change it).
