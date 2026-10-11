@@ -19,6 +19,7 @@ from NetUtils import ClientStatus
 from Utils import async_start, gui_enabled, init_logging
 
 from .game.reader import AttachResult, AttachStatus, GameReader
+from .guide import build_guide, render_markup, render_plain
 from .locations import GAME_NAME
 from .tracker import GOAL_SHARD_HUNT, Baseline, Tracker
 
@@ -32,14 +33,21 @@ class Bejeweled3CommandProcessor(ClientCommandProcessor):
     ctx: Bejeweled3Context
 
     def _cmd_bj3(self, subcommand: str = "status") -> bool:
-        """Bejeweled 3: "/bj3 status" shows what the client sees; "/bj3 rescan" re-reads the game from scratch."""
+        """Bejeweled 3: "/bj3 status" shows what the client sees, "/bj3 guide" what to do next,
+        "/bj3 rescan" re-reads the game from scratch."""
         if subcommand == "rescan":
             if self.ctx.tracker is not None:
                 self.ctx.tracker.reset_game_state()
             self.output("Re-reading the game from scratch.")
             return True
+        if subcommand == "guide":
+            if self.ctx.tracker is None:
+                self.output("Not connected to an Archipelago server.")
+            else:
+                self.output(render_plain(build_guide(self.ctx.tracker, self.ctx.checked_locations)))
+            return True
         if subcommand != "status":
-            self.output("Usage: /bj3 status | /bj3 rescan")
+            self.output("Usage: /bj3 status | /bj3 guide | /bj3 rescan")
             return False
         for line in self.ctx.status_lines():
             self.output(line)
@@ -63,6 +71,7 @@ class Bejeweled3Context(CommonContext):
         self.binding_requested = False
         self.last_status = ""
         self.game_task: asyncio.Task | None = None
+        self.last_guide = ""
 
     # ------------------------------------------------------------------ server
 
@@ -128,9 +137,38 @@ class Bejeweled3Context(CommonContext):
         await super().disconnect(allow_autoreconnect)
 
     def make_gui(self):  # the kivy type only exists with the GUI
-        ui = super().make_gui()
-        ui.base_title = "Archipelago Bejeweled 3 Client"
-        return ui
+        base = super().make_gui()
+
+        class Bejeweled3Manager(base):
+            base_title = "Archipelago Bejeweled 3 Client"
+
+            def build(self):
+                container = super().build()
+                from kivy.metrics import dp
+                from kivy.uix.scrollview import ScrollView
+                from kivymd.uix.label import MDLabel
+
+                self.guide_label = MDLabel(text="Connect to see your guide.", markup=True, adaptive_height=True,
+                                           padding=(dp(12), dp(12)))
+                scroll = ScrollView(do_scroll_x=False)
+                scroll.add_widget(self.guide_label)
+                self.add_client_tab("Bejeweled 3", scroll)
+                return container
+
+        return Bejeweled3Manager
+
+    def refresh_guide(self) -> None:
+        """Update the guide tab when anything in it changed."""
+        if self.tracker is None:
+            return
+        lines = build_guide(self.tracker, self.checked_locations)
+        text = render_plain(lines)
+        if text == self.last_guide:
+            return
+        self.last_guide = text
+        label = getattr(self.ui, "guide_label", None) if self.ui else None
+        if label is not None:
+            label.text = render_markup(lines)
 
     # ------------------------------------------------------------------ game
 
@@ -160,6 +198,7 @@ class Bejeweled3Context(CommonContext):
             await self.send_msgs([{"cmd": "StatusUpdate", "status": ClientStatus.CLIENT_GOAL}])
             self.finished_game = True
             logger.info("Goal complete!")
+        self.refresh_guide()
         status = tracker.status_line()
         if status != self.last_status:
             self.last_status = status

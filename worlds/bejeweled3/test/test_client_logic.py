@@ -460,3 +460,53 @@ class TestEliteValues(TrackerTestCase):
         tracker = self.make()
         self.feed(tracker, snap(badges={17: 6}))
         self.assertIsNone(tracker.stable)
+
+
+class TestGuide(TrackerTestCase):
+    SHORT = frozenset(data.address for data in LOCATION_TABLE.values() if data.length == 1)
+
+    def guide(self, tracker: Tracker, checked: set[int] = frozenset()) -> str:
+        from ..guide import build_guide, render_plain
+        return render_plain(build_guide(tracker, checked))
+
+    def short_tracker(self, items: tuple[str, ...] = ()) -> Tracker:
+        tracker = Tracker(self.SHORT, 0, GOAL_SHARD_HUNT, 5)
+        tracker.apply_binding("AP-Test", EMPTY)
+        tracker.set_received(item_ids(*items))
+        return tracker
+
+    def test_goal_and_do_next(self) -> None:
+        tracker = self.short_tracker(items=(JEWEL_SHARD, JEWEL_SHARD))
+        self.feed(tracker, snap())
+        text = self.guide(tracker)
+        self.assertIn("Goal: collect Jewel Shards (2/5)", text)
+        self.assertIn("Badge: Inferno - Bronze: clear 50 Flame Gems (total, any mode)", text)
+        self.assertIn("Classic: Reach Level 2: reach level 2 in one Classic game", text)
+        self.assertIn("Quest Mode: 16 checks", text)  # relic 1 + relic 2 wait for Quest Mode first
+        self.assertIn("!hint Quest Mode", text)
+
+    def test_banked_and_done(self) -> None:
+        tracker = self.short_tracker()
+        self.feed(tracker, snap(badges={3: 1}, quests={6}))
+        checked = {badge("Blaster", "Bronze")}
+        text = self.guide(tracker, checked)
+        self.assertIn("Checks sent: 1 of 30", text)
+        self.assertIn("Quest: Relic 1 - Buried Treasure: waiting for Quest Mode", text)
+        self.assertNotIn("Badge: Blaster - Bronze:", text)
+
+    def test_relic_gate_reminder(self) -> None:
+        tracker = self.short_tracker(items=("Quest Mode", RELIC_KEY))
+        self.feed(tracker, snap(quests={0, 1}))
+        text = self.guide(tracker)
+        self.assertIn("Relic 2 quests (8 open)", text)
+        self.assertIn("Relic 2 opens in game after 4 quests of relic 1 (you have 2)", text)
+
+    def test_secret_mode_unlock_reminder(self) -> None:
+        tracker = self.short_tracker(items=("Poker Mode",))
+        self.feed(tracker, snap())
+        self.assertIn("Poker also needs the game's own unlock: reach level 5 in Classic.", self.guide(tracker))
+
+    def test_paused_guide(self) -> None:
+        tracker = self.short_tracker()
+        self.feed(tracker, snap(profile="Someone Else"))
+        self.assertIn("Paused:", self.guide(tracker))

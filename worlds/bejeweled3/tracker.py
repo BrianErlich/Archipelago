@@ -220,7 +220,7 @@ class Tracker:
         held: dict[int, str] = {}
         for location_id in sorted(self.slot_locations - done):
             data = LOCATIONS_BY_ID.get(location_id)
-            if data is None or not self._achieved(data):
+            if data is None or not self.achieved(data):
                 continue
             missing = self.missing_item(data)
             if missing is None:
@@ -233,7 +233,8 @@ class Tracker:
         self.held = held
         return to_send
 
-    def _achieved(self, data: LocationData) -> bool:
+    def achieved(self, data: LocationData) -> bool:
+        """Whether the game shows this check as done (beyond the baseline / in the current Classic game)."""
         assert self.stable is not None and self.baseline is not None
         if data.kind == "level":
             return self.session_best_level + 1 >= data.level
