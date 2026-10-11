@@ -199,3 +199,7 @@ Badge objects in memory (20, found by vtable; vtables are static in `.rdata`, e.
 - redstone59's build had a quest id at `+0x322C`, so this is the same field shifted by 8.
 
 This makes every mode identifiable from the board, and gives the current quest's index (and so its relic) while it's played.
+
+## Badge values — completed 2026-10-11 (live seed)
+- Common badge tiers: **1 Bronze, 2 Silver, 3 Gold, 4 Platinum**. 2, 3 and 4 were verified on Blaster; 1 on Inferno, Bejeweler and others.
+- **Elite badges store 5 when earned** (Superstar, verified). The client accepts 0–5 for ids 15–19 and treats any nonzero value as earned.
