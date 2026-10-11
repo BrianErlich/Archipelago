@@ -393,3 +393,48 @@ class TestClientAttach(unittest.TestCase):
 
         ctx = asyncio.run(run())
         self.assertFalse(ctx.attached)
+
+
+class TestLockedModeHint(TrackerTestCase):
+    QUEST_BOARD = ".?AVTimeLimitBoard@Sexy@@"
+
+    def board(self, rtti: str, mode: str | None, address: int = 0x5000) -> BoardState:
+        return BoardState(address, rtti, mode, 0, 0)
+
+    def hints(self, tracker: Tracker) -> list[str]:
+        return [m for m in tracker.drain_messages() if m.startswith("You're playing")]
+
+    def test_hint_when_starting_a_locked_quest(self) -> None:
+        tracker = self.make()
+        tracker.drain_messages()
+        self.feed(tracker, snap(board=self.board(self.QUEST_BOARD, "Quest")), times=4)
+        hints = self.hints(tracker)
+        self.assertEqual(len(hints), 1)  # once per game, not every tick
+        self.assertIn("haven't received Quest Mode", hints[0])
+        self.assertIn("saved and will count", hints[0])
+
+    def test_no_hint_when_unlocked(self) -> None:
+        tracker = self.make(items=("Quest Mode",))
+        tracker.drain_messages()
+        self.feed(tracker, snap(board=self.board(self.QUEST_BOARD, "Quest")))
+        self.assertEqual(self.hints(tracker), [])
+
+    def test_no_hint_for_ambiguous_board(self) -> None:
+        tracker = self.make()
+        tracker.drain_messages()
+        self.feed(tracker, snap(board=self.board(".?AVDigBoard@Sexy@@", None)))  # Diamond Mine or a dig quest
+        self.assertEqual(self.hints(tracker), [])
+
+    def test_no_hint_for_mode_without_checks(self) -> None:
+        tracker = self.make()
+        tracker.drain_messages()
+        self.feed(tracker, snap(board=self.board(ZEN_BOARD, "Zen")))  # Zen has no checks of its own
+        self.assertEqual(self.hints(tracker), [])
+
+    def test_hint_again_for_the_next_game(self) -> None:
+        tracker = self.make()
+        tracker.drain_messages()
+        self.feed(tracker, snap(board=self.board(self.QUEST_BOARD, "Quest", 0x5000)))
+        self.feed(tracker, snap(board=None))
+        self.feed(tracker, snap(board=self.board(self.QUEST_BOARD, "Quest", 0x6000)))
+        self.assertEqual(len(self.hints(tracker)), 2)

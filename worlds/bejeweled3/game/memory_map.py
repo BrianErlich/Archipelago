@@ -27,8 +27,8 @@ class MemoryMap:
     board_offset: int  # Bej3App -> Board* (0 when no board)              verified (Classic + menu)
     board_score: int  # Board + : i32, live score                         verified (Classic, Diamond Mine)
     board_level: int  # Board + : i32, 0-based                            verified (Classic, Zen)
-    # Every board class in the exe -> the mode it belongs to (None = mapping not verified yet; only used for
-    # display). A board whose class isn't listed here is treated as an unreadable tick.
+    # Every board class in the exe -> the mode it belongs to (None = ambiguous or unknown). Used for the
+    # "you're in a locked mode" hint and for display. A board whose class isn't listed here is an unreadable tick.
     board_modes: dict[str, str | None]
 
 
@@ -48,22 +48,26 @@ STEAM_1_1_12_4196 = MemoryMap(
     board_score=0xC88,  # +0xD24 equals it in Classic/Zen/Lightning but lags until game end on DigBoard
     board_level=0xE04,
     board_modes={
+        # Own board classes: one mode each.
         ".?AVClassicBoard@Sexy@@": "Classic",  # verified 2026-10-10
         ".?AVZenBoard@Sexy@@": "Zen",  # verified 2026-10-11
         ".?AVSpeedBoard@Sexy@@": "Lightning",  # verified 2026-10-11
-        ".?AVPokerBoard@Sexy@@": None,
-        ".?AVButterflyBoard@Sexy@@": "Butterflies",  # seen in the Butterflies *quest*; the mode is still locked
-        ".?AVInfernoBoard@Sexy@@": None,
-        ".?AVDigBoard@Sexy@@": "Diamond Mine",  # verified 2026-10-11 (dig quests may use it too)
-        ".?AVQuestBoard@Sexy@@": None,
-        ".?AVBadMoveLimitBoard@Sexy@@": None,
-        ".?AVBalanceBoard@Sexy@@": None,
-        ".?AVFillerBoard@Sexy@@": None,
-        ".?AVMoveLimitBoard@Sexy@@": None,
-        ".?AVNoLoseBoard@Sexy@@": None,
-        ".?AVRealTimeBombBoard@Sexy@@": None,
-        ".?AVTimeBombBoard@Sexy@@": None,
-        ".?AVTimeLimitBoard@Sexy@@": "Quest",  # verified 2026-10-11 (Alchemy quest)
+        # Quest-only challenge types (quest.cfg); all derive from QuestBoard.
+        ".?AVTimeLimitBoard@Sexy@@": "Quest",  # verified 2026-10-11 (Alchemy)
+        ".?AVBalanceBoard@Sexy@@": "Quest",
+        ".?AVFillerBoard@Sexy@@": "Quest",
+        ".?AVMoveLimitBoard@Sexy@@": "Quest",
+        ".?AVBadMoveLimitBoard@Sexy@@": "Quest",
+        ".?AVNoLoseBoard@Sexy@@": "Quest",
+        ".?AVTimeBombBoard@Sexy@@": "Quest",
+        ".?AVRealTimeBombBoard@Sexy@@": "Quest",
+        ".?AVQuestBoard@Sexy@@": "Quest",
+        # Shared: secret.cfg defines each secret mode as a "quest" with the same challenge type as some quests,
+        # so these boards are EITHER the secret mode OR a quest of that type (None until a marker is verified).
+        ".?AVPokerBoard@Sexy@@": None,  # Poker, or quests Poker / Poker II / Poker III
+        ".?AVButterflyBoard@Sexy@@": None,  # Butterflies, or the 4 Butterflies quests (seen in one, 2026-10-11)
+        ".?AVInfernoBoard@Sexy@@": None,  # Ice Storm (challenge "Inferno"), or the 3 Ice Storm quests
+        ".?AVDigBoard@Sexy@@": None,  # Diamond Mine (verified 2026-10-11), or the dig quests (Gold Rush, ...)
         ".?AVBoard@Sexy@@": None,
     },
 )

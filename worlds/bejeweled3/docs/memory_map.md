@@ -181,3 +181,10 @@ Badge objects in memory (20, found by vtable; vtables are static in `.rdata`, e.
 - **The Gambler's tooltip shows a counter `(0/10)`, so it's cumulative.** Relic Hunter has no counter and is probably per-game (one Diamond Mine game with 0 artifacts didn't change it).
 - 2026-10-11 03:25 — quest array on AP1PROBE now reads `[2, 4, 5, 6, 7]`. Byte 2 = Alchemy (`quest.cfg` k = 2), set during the subagent's Alchemy run. That's a **non-adjacent** data point confirming the k-to-`quest.cfg` mapping.
 - 2026-10-11 03:25 — the packaged `bejeweled3.apworld` (34 KB) was tested in a throwaway copy of Brian's installed AP 0.6.8 (frozen). It generated a 2-player seed (Medium + APQuest), and the frozen **Bejeweled 3 Client** attached to the live game, connected, bound the profile and printed the baseline warning. No errors in the log.
+
+## Board class hierarchy (static, from the exe's RTTI ClassHierarchyDescriptors, 2026-10-11)
+
+- `ClassicBoard`, `ZenBoard` and `SpeedBoard` (Lightning) derive directly from `Board`, so each one means exactly one mode.
+- **Every other board class derives from `QuestBoard`.** That includes the secret modes: `secret.cfg` defines Poker, Butterflies, Ice Storm (challenge "Inferno") and Diamond Mine (challenge "Dig") as "quests". So `PokerBoard`, `ButterflyBoard`, `InfernoBoard` and `DigBoard` are *either* the secret mode *or* a quest with the same challenge type (`DigBoard` derives from `TimeLimitBoard`). Ice Storm = `InfernoBoard` is now confirmed from the data.
+- The challenge types used only by quests in `quest.cfg` are Balance, Filler, Move Limit, No Lose, Time Bomb (both kinds) and Time Limit. Their boards always mean Quest mode.
+- Telling a shared board apart (mode vs. quest) needs an instance field, likely a quest index. A passive read-only recorder is collecting board dumps during Brian's live seed to find it.

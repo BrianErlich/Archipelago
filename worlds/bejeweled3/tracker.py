@@ -32,8 +32,10 @@ from .items import (
 from .locations import (
     ALL_MODES,
     BASE_MODES,
+    CLASSIC,
     LOCATION_TABLE,
     MAX_LEVEL,
+    QUEST,
     RELIC_COUNT,
     SECRET_MODES,
     TIER_NAMES,
@@ -153,12 +155,32 @@ class Tracker:
         if board is None:
             self.session_board, self.session_best_level = None, -1
             return
-        if board.address != self.session_board or (board.score == 0 and board.level == 0):
+        if board.address != self.session_board:
             self.session_board, self.session_best_level = board.address, -1
+            self._hint_locked_mode(board.mode)
+        elif board.score == 0 and board.level == 0:
+            self.session_best_level = -1  # same address reused for a new game
         if board.rtti == CLASSIC_BOARD:
             self.session_best_level = max(self.session_best_level, board.level)
             if board.level >= LEVELORD_LEVEL_INDEX:
                 self.levelord_live = True
+
+    def _hint_locked_mode(self, mode: str | None) -> None:
+        """Say so when a game starts in a mode whose item hasn't arrived, if that mode has checks in this seed."""
+        if mode is None or self.has_mode(mode):
+            return
+        held_here = [LOCATIONS_BY_ID[i] for i in self.slot_locations
+                     if i in LOCATIONS_BY_ID and LOCATIONS_BY_ID[i].region == mode]
+        if not held_here:
+            return
+        item = mode_item_name(mode)
+        if mode == CLASSIC:
+            after = "Levels reached now won't count, but badges you earn are saved and count when it arrives."
+        elif mode == QUEST:
+            after = "Quests you finish now are saved and will count when it arrives."
+        else:
+            after = "Badges you earn now are saved and will count when it arrives."
+        self.messages.append(f"You're playing {mode}, but you haven't received {item} yet. {after}")
 
     @property
     def needs_binding(self) -> bool:
