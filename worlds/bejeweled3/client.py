@@ -136,12 +136,12 @@ class Bejeweled3Context(CommonContext):
             return None
         item, location, finder = args["item"][0], args["item"][1], args["item"][2]
         self.announce_hints_until = 0.0
-        me = self.player_names.get(self.slot, "I")
         item_name = self.item_names.lookup_in_slot(item, self.slot)
         if args.get("found"):
-            return f"{me}'s {item_name} was already found (thanks!)."
+            return None  # nothing to ask the room for
         where = self.location_names.lookup_in_slot(location, finder)
-        return f"{me} is waiting on {item_name}: it's at \"{where}\" in {self.player_names.get(finder, '?')}'s world."
+        finder_name = self.player_names.get(finder, "?")
+        return f"[Bejeweled 3 Client] Waiting on {item_name}: {where} ({finder_name}'s world)."
 
     def _apply_stored_binding(self) -> None:
         if self.tracker is None:

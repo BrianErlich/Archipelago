@@ -537,7 +537,7 @@ class TestHintAnnouncement(unittest.TestCase):
         def check(ctx) -> None:
             ctx.announce_hints_until = time.monotonic() + 30
             self.assertEqual(ctx.hint_announcement(self.hint()),
-                             "Brian is waiting on Quest Mode: it's at \"Shop 12\" in Tom's world.")
+                             "[Bejeweled 3 Client] Waiting on Quest Mode: Shop 12 (Tom's world).")
             self.assertIsNone(ctx.hint_announcement(self.hint()))  # only the first hint after the request
         self.with_ctx(check)
 
@@ -551,6 +551,5 @@ class TestHintAnnouncement(unittest.TestCase):
     def test_found_item(self) -> None:
         def check(ctx) -> None:
             ctx.announce_hints_until = time.monotonic() + 30
-            self.assertEqual(ctx.hint_announcement(self.hint(found=True)),
-                             "Brian's Quest Mode was already found (thanks!).")
+            self.assertIsNone(ctx.hint_announcement(self.hint(found=True)))  # found already: nothing to ask
         self.with_ctx(check)
