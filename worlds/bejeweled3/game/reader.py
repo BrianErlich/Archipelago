@@ -25,9 +25,10 @@ from .memory_map import MEMORY_MAPS, PRODUCT_NAME, MemoryMap
 class BoardState:
     address: int
     rtti: str
-    mode: str | None  # None when the board class isn't mapped to a mode yet
+    mode: str | None  # None when it can't be told (yet)
     score: int
     level: int  # 0-based
+    quest_index: int | None = None  # 0-39 when this board is a quest
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,8 @@ class FakeReader:
 # ---------------------------------------------------------------------------------------------------- live (Windows)
 
 PROCESS_NAMES = ("bejeweled3.exe", "popcapgame1.exe")
+# Boards that derive straight from Board (one mode each). Every other board class derives from QuestBoard.
+OWN_BOARDS = frozenset({".?AVClassicBoard@Sexy@@", ".?AVZenBoard@Sexy@@", ".?AVSpeedBoard@Sexy@@"})
 PROCESS_VM_READ = 0x0010
 PROCESS_QUERY_INFORMATION = 0x0400
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -320,9 +323,15 @@ class PymemReader:
                 rtti = self.rtti_name(board_address)
                 if rtti not in memory_map.board_modes:
                     return None
-                board = BoardState(board_address, rtti, memory_map.board_modes.get(rtti),
-                                   self._i32(board_address + memory_map.board_score),
-                                   self._i32(board_address + memory_map.board_level))
+                mode, quest_index = memory_map.board_modes[rtti], None
+                if rtti not in OWN_BOARDS:  # quest engine: Quest mode or a secret mode, told apart by the quest id
+                    quest_id = self._i32(board_address + memory_map.board_quest_id)
+                    if 0 <= quest_id < memory_map.quest_count:
+                        mode, quest_index = "Quest", quest_id
+                    else:
+                        mode = memory_map.secret_mode_ids.get(quest_id)
+                board = BoardState(board_address, rtti, mode, self._i32(board_address + memory_map.board_score),
+                                   self._i32(board_address + memory_map.board_level), quest_index)
             return Snapshot(name, badges, quests, board)
         except (ReadError, UnicodeDecodeError, struct.error):
             return None

@@ -553,3 +553,65 @@ class TestHintAnnouncement(unittest.TestCase):
             ctx.announce_hints_until = time.monotonic() + 30
             self.assertIsNone(ctx.hint_announcement(self.hint(found=True)))  # found already: nothing to ask
         self.with_ctx(check)
+
+
+class TestQuestAwareHints(TrackerTestCase):
+    """Shared quest-engine boards: the quest id tells a quest (0-39) from a secret mode (1000 + n)."""
+
+    def hints(self, tracker: Tracker) -> list[str]:
+        return [m for m in tracker.drain_messages() if m.startswith("You're playing")]
+
+    def test_dig_quest_is_quest_not_diamond_mine(self) -> None:
+        tracker = self.make()
+        tracker.drain_messages()
+        board = BoardState(0x7000, ".?AVDigBoard@Sexy@@", "Quest", 0, 0, quest_index=1)  # Gold Rush
+        self.feed(tracker, snap(board=board))
+        hints = self.hints(tracker)
+        self.assertEqual(len(hints), 1)
+        self.assertIn("haven't received Quest Mode", hints[0])
+
+    def test_secret_mode_hint(self) -> None:
+        tracker = self.make()
+        tracker.drain_messages()
+        self.feed(tracker, snap(board=BoardState(0x7000, ".?AVButterflyBoard@Sexy@@", "Butterflies", 0, 0)))
+        self.assertIn("haven't received Butterflies Mode", self.hints(tracker)[0])
+
+    def test_relic_key_hint(self) -> None:
+        tracker = self.make(items=("Quest Mode",))
+        tracker.drain_messages()
+        self.feed(tracker, snap(board=BoardState(0x7000, ".?AVTimeLimitBoard@Sexy@@", "Quest", 0, 0, quest_index=16)))
+        hints = self.hints(tracker)
+        self.assertEqual(len(hints), 1)
+        self.assertIn("Alchemy II (relic 3). It needs 2 Relic Keys to count and you have 0", hints[0])
+
+    def test_no_relic_hint_with_enough_keys(self) -> None:
+        tracker = self.make(items=("Quest Mode", RELIC_KEY))
+        tracker.drain_messages()
+        self.feed(tracker, snap(board=BoardState(0x7000, ".?AVTimeLimitBoard@Sexy@@", "Quest", 0, 0, quest_index=8)))
+        self.assertEqual(self.hints(tracker), [])
+
+
+@unittest.skipUnless(sys.platform == "win32", "PymemReader is Windows-only")
+class TestReaderQuestId(TestReaderValidation):
+    def with_quest_id(self, board_class: str, quest_id: int):
+        reader = self.build(board_class=board_class)
+        original = reader._read
+
+        def read(address: int, size: int) -> bytes:
+            if address == self.BOARD + STEAM_1_1_12_4196.board_quest_id:
+                return struct.pack("<i", quest_id)[:size]
+            return original(address, size)
+
+        reader._read = read  # type: ignore[method-assign]
+        return reader.read().board
+
+    def test_quest_id_means_quest(self) -> None:
+        board = self.with_quest_id(".?AVDigBoard@Sexy@@", 1)
+        self.assertEqual((board.mode, board.quest_index), ("Quest", 1))
+
+    def test_secret_id_means_secret_mode(self) -> None:
+        board = self.with_quest_id(".?AVButterflyBoard@Sexy@@", 1001)
+        self.assertEqual((board.mode, board.quest_index), ("Butterflies", None))
+
+    def test_garbage_id_means_unknown(self) -> None:
+        self.assertIsNone(self.with_quest_id(".?AVDigBoard@Sexy@@", 7777).mode)

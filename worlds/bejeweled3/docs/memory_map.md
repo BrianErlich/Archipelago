@@ -188,3 +188,14 @@ Badge objects in memory (20, found by vtable; vtables are static in `.rdata`, e.
 - **Every other board class derives from `QuestBoard`.** That includes the secret modes: `secret.cfg` defines Poker, Butterflies, Ice Storm (challenge "Inferno") and Diamond Mine (challenge "Dig") as "quests". So `PokerBoard`, `ButterflyBoard`, `InfernoBoard` and `DigBoard` are *either* the secret mode *or* a quest with the same challenge type (`DigBoard` derives from `TimeLimitBoard`). Ice Storm = `InfernoBoard` is now confirmed from the data.
 - The challenge types used only by quests in `quest.cfg` are Balance, Filler, Move Limit, No Lose, Time Bomb (both kinds) and Time Limit. Their boards always mean Quest mode.
 - Telling a shared board apart (mode vs. quest) needs an instance field, likely a quest index. A passive read-only recorder is collecting board dumps during Brian's live seed to find it.
+
+## Quest id on quest-engine boards — VERIFIED 2026-10-11 (passive recorder during Brian's live seed)
+
+`Board + 0x3234` (i32) on every `QuestBoard`-derived board:
+- **0–39 = quest index in `quest.cfg`**: Gold Rush quest (`DigBoard`) read 1; Balance quest (`BalanceBoard`) read 4.
+- **1000 + n = secret mode n in `secret.cfg` order** (Poker, Butterflies, Ice Storm, Diamond Mine): Butterflies mode
+  (`ButterflyBoard`) read **1001**. 1000, 1002 and 1003 are inferred from the file order.
+- On `ClassicBoard`/`ZenBoard` the field is meaningless (read 1 and 0); the reader only uses it on quest-engine boards.
+- redstone59's build had a quest id at `+0x322C`, so this is the same field shifted by 8.
+
+This makes every mode identifiable from the board, and gives the current quest's index (and so its relic) while it's played.

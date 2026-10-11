@@ -36,6 +36,7 @@ from .locations import (
     LOCATION_TABLE,
     MAX_LEVEL,
     QUEST,
+    QUEST_NAMES,
     RELIC_COUNT,
     SECRET_MODES,
     TIER_NAMES,
@@ -160,7 +161,7 @@ class Tracker:
             return
         if board.address != self.session_board:
             self.session_board, self.session_best_level = board.address, -1
-            self._hint_locked_mode(board.mode)
+            self._hint_locked_mode(board.mode, board.quest_index)
         elif board.score == 0 and board.level == 0:
             self.session_best_level = -1  # same address reused for a new game
         if board.rtti == CLASSIC_BOARD:
@@ -168,9 +169,14 @@ class Tracker:
             if board.level >= LEVELORD_LEVEL_INDEX:
                 self.levelord_live = True
 
-    def _hint_locked_mode(self, mode: str | None) -> None:
-        """Say so when a game starts in a mode whose item hasn't arrived, if that mode has checks in this seed."""
-        if mode is None or self.has_mode(mode):
+    def _hint_locked_mode(self, mode: str | None, quest_index: int | None = None) -> None:
+        """Say so when a game starts in a mode whose item hasn't arrived (or a quest whose relic needs more Relic
+        Keys), if that mode/quest has checks in this seed."""
+        if mode is None:
+            return
+        if self.has_mode(mode):
+            if mode == QUEST and quest_index is not None:
+                self._hint_relic_key(quest_index)
             return
         held_here = [LOCATIONS_BY_ID[i] for i in self.slot_locations
                      if i in LOCATIONS_BY_ID and LOCATIONS_BY_ID[i].region == mode]
@@ -184,6 +190,18 @@ class Tracker:
         else:
             after = "Badges you earn now are saved and will count when it arrives."
         self.messages.append(f"You're playing {mode}, but you haven't received {item} yet. {after}")
+
+    def _hint_relic_key(self, quest_index: int) -> None:
+        data = next((d for d in (LOCATIONS_BY_ID.get(i) for i in self.slot_locations)
+                     if d is not None and d.kind == "quest" and d.quest_index == quest_index), None)
+        if data is None:
+            return
+        needed = keys_needed_for_relic(data.relic)
+        have = self.received[RELIC_KEY]
+        if have < needed:
+            self.messages.append(f"You're playing {QUEST_NAMES[quest_index]} (relic {data.relic}). It needs "
+                                 f"{needed} Relic Key{'s' if needed > 1 else ''} to count and you have {have}. "
+                                 f"It's saved and will count when the key arrives.")
 
     @property
     def needs_binding(self) -> bool:
