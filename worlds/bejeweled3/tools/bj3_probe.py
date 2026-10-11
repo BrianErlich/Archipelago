@@ -1,3 +1,4 @@
+# ruff: noqa: T201  (command-line tool: printing is its output)
 """
 bj3_probe.py - Phase 0 reverse-engineering helper for Bejeweled 3 (PC). READ-ONLY.
 
@@ -260,7 +261,7 @@ class Game:
                 yield base, size
             addr = base + size
 
-    def snapshot(self) -> "Snapshot":
+    def snapshot(self) -> Snapshot:
         need_numpy()
         bases, lens, chunks, skipped = [], [], [], 0
         for base, size in self.regions():
@@ -308,7 +309,7 @@ class Snapshot:
         np.savez(path, bases=self.bases, lens=self.lens, blob=self.blob, meta=json.dumps(meta))
 
     @classmethod
-    def load(cls, path: Path) -> "Snapshot":
+    def load(cls, path: Path) -> Snapshot:
         d = np.load(path)
         snap = cls(d["bases"], d["lens"], d["blob"])
         snap.meta = json.loads(str(d["meta"]))
@@ -316,7 +317,7 @@ class Snapshot:
 
     def region_views(self, dtype: str):
         size = np.dtype(dtype).itemsize
-        for base, ln, off in zip(self.bases, self.lens, self.offs):
+        for base, ln, off in zip(self.bases, self.lens, self.offs, strict=False):
             n = int(ln) // size * size
             yield int(base), self.blob[int(off):int(off) + n].view(dtype)
 
@@ -419,7 +420,10 @@ def cmd_walk(g: Game, args):
                 obj = g.u32(addr)
                 print(f"   [{g.describe(addr)}] -> {obj:08X} {g.rtti_name(obj) or '(no RTTI)'}   +{off:X}")
                 addr = obj + off
-            val = g.rtti_name(addr) if typ == "vtable" else repr(g.wstring(addr)) if typ == "wstr" else g.typed(addr, typ)
+            if typ == "vtable":
+                val = g.rtti_name(addr)
+            else:
+                val = repr(g.wstring(addr)) if typ == "wstr" else g.typed(addr, typ)
             print(f"   value @ {addr:08X} = {val}")
         except Exception as e:
             print(f"   read failed: {e}")
@@ -461,7 +465,7 @@ def cmd_objtree(g: Game, args):
                 if not cls or val in seen:
                     continue
                 seen.add(val)
-                p = path + [off]
+                p = [*path, off]
                 if args.cls.lower() in cls.lower():
                     print(f"  {args.spec.split(':')[0]},{','.join(f'{x:X}' for x in p)}  -> {val:08X} {cls}")
                 nxt.append((val, p))
@@ -516,7 +520,7 @@ def vtables_matching(g: Game, text: str) -> dict[int, str]:
     words = np.frombuffer(img[: len(img) // 4 * 4], dtype="<u4")
     lo, hi = g.base, g.base + g.image_size
     out = {}
-    for name, start, end, chars in g.sections:
+    for _name, start, end, chars in g.sections:
         if chars & 0x80000000:  # vtables live in read-only data
             continue
         for i in range(start // 4 + 1, min(end, len(img)) // 4):
@@ -617,9 +621,8 @@ def cmd_scan(g: Game, args):
 
 
 def _print_candidates(g, addrs, vals, limit):
-    for a, v in list(zip(addrs, vals))[:limit]:
-        a = int(a)
-        print(f"  {g.describe(a):40s} = {v}")
+    for a, v in list(zip(addrs, vals, strict=False))[:limit]:
+        print(f"  {g.describe(int(a)):40s} = {v}")
     if len(addrs) > limit:
         print(f"  ... {len(addrs) - limit} more")
 
@@ -654,7 +657,7 @@ def cmd_ptrscan(g: Game, args):
         ps, ts = np.concatenate(found_p), np.concatenate(found_t)
         _, vals_p = snap.values_at(ps, "<u4")
         nxt = []
-        for p, t, v in zip(ps.tolist(), ts.tolist(), vals_p.tolist()):
+        for p, t, v in zip(ps.tolist(), ts.tolist(), vals_p.tolist(), strict=False):
             if p in link or p == target:
                 continue
             link[p] = (t, t - v)
@@ -686,7 +689,8 @@ def cmd_ptrcheck(g: Game, args):
     keep = []
     for r in data["chains"]:
         try:
-            if g.typed(g.resolve(r["rva"], r["offsets"]), typ) == (float(args.value) if typ[0] == "f" else int(args.value)):
+            want = float(args.value) if typ[0] == "f" else int(args.value)
+            if g.typed(g.resolve(r["rva"], r["offsets"]), typ) == want:
                 keep.append(r)
         except Exception:
             pass
@@ -737,7 +741,7 @@ def cmd_diff(args):
             ok, vc = c.values_at(addrs, dtype)
             keep = ok & (vc == new)
             addrs, old, new = addrs[keep], old[keep], new[keep]
-        rows.extend(zip(addrs.tolist(), old.tolist(), new.tolist()))
+        rows.extend(zip(addrs.tolist(), old.tolist(), new.tolist(), strict=False))
     print(f"{len(rows)} changed value(s) ({args.type})")
     for addr, old, new in rows[: args.limit]:
         loc = f"exe+{addr - base:X}" if base <= addr < base + image_size else f"{addr:08X}"
@@ -801,13 +805,13 @@ def main():
     p = sub.add_parser("scan")
     p.add_argument("action", choices=["new", "next", "show"])
     p.add_argument("--value", type=float)
-    p.add_argument("--type", default="i32", choices=[t for t in TYPES])
+    p.add_argument("--type", default="i32", choices=list(TYPES))
     for flag in ("changed", "unchanged", "increased", "decreased"):
         p.add_argument(f"--{flag}", action="store_true")
     p.add_argument("--limit", type=int, default=40)
     p = sub.add_parser("ptrscan")
     p.add_argument("addr", help="hex address of the value")
-    p.add_argument("--type", default="i32", choices=[t for t in TYPES])
+    p.add_argument("--type", default="i32", choices=list(TYPES))
     p.add_argument("--depth", type=int, default=3)
     p.add_argument("--max-offset", default="4000", help="hex, max offset per level (default 0x4000)")
     p.add_argument("--max-level", type=int, default=20000, help="max non-static pointers carried per level")
@@ -815,7 +819,7 @@ def main():
     p.add_argument("--limit", type=int, default=30)
     p = sub.add_parser("ptrcheck")
     p.add_argument("--value", required=True)
-    p.add_argument("--type", choices=[t for t in TYPES])
+    p.add_argument("--type", choices=list(TYPES))
     p.add_argument("--file", help="file name in probe_out/ (default ptrscan.json)")
     p.add_argument("--limit", type=int, default=30)
     p = sub.add_parser("dump")
@@ -824,7 +828,7 @@ def main():
     p.add_argument("a")
     p.add_argument("b")
     p.add_argument("--then", help="third dump; keep only values that stayed at their B value")
-    p.add_argument("--type", default="i32", choices=[t for t in TYPES])
+    p.add_argument("--type", default="i32", choices=list(TYPES))
     p.add_argument("--from", dest="frm", type=float)
     p.add_argument("--to", type=float)
     p.add_argument("--limit", type=int, default=200)
@@ -832,15 +836,22 @@ def main():
 
     args = ap.parse_args()
     if args.cmd == "diff":
-        return cmd_diff(args)
+        cmd_diff(args)
+        return
     if args.cmd == "files":
-        return cmd_files(args)
+        cmd_files(args)
+        return
     g = Game(args.pid)
     if g.version.get("file_version") != "1.1.12.4196":
         print(f"WARNING: exe version {g.version.get('file_version')} differs from the build this probe "
               f"was written against (1.1.12.4196, Steam).", file=sys.stderr)
-    {"info": cmd_info, "watch": cmd_watch, "walk": cmd_walk, "objtree": cmd_objtree, "fields": cmd_fields, "findobj": cmd_findobj, "rtti": cmd_rtti, "scan": cmd_scan, "ptrscan": cmd_ptrscan,
-     "ptrcheck": cmd_ptrcheck, "dump": cmd_dump}[args.cmd](g, args)
+    commands = {
+        "info": cmd_info, "watch": cmd_watch, "walk": cmd_walk, "objtree": cmd_objtree, "fields": cmd_fields,
+        "findobj": cmd_findobj, "rtti": cmd_rtti, "scan": cmd_scan, "ptrscan": cmd_ptrscan, "ptrcheck": cmd_ptrcheck,
+        "dump": cmd_dump,
+    }
+    commands[args.cmd](g, args)
+    return
 
 
 if __name__ == "__main__":
