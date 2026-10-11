@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -32,9 +33,17 @@ ATTACH_INTERVAL = 1.0  # seconds between attach attempts while searching
 class Bejeweled3CommandProcessor(ClientCommandProcessor):
     ctx: Bejeweled3Context
 
-    def _cmd_bj3(self, subcommand: str = "status") -> bool:
+    def _cmd_bj3(self, subcommand: str = "status", *words: str) -> bool:
         """Bejeweled 3: "/bj3 status" shows what the client sees, "/bj3 guide" what to do next,
+        "/bj3 hint <item>" hints an item and posts the answer to everyone in chat,
         "/bj3 rescan" re-reads the game from scratch."""
+        if subcommand == "hint":
+            item = " ".join(words).strip()
+            if not item:
+                self.output("Usage: /bj3 hint <item name>, e.g. /bj3 hint Quest Mode")
+                return False
+            self.ctx.request_announced_hint(item)
+            return True
         if subcommand == "rescan":
             if self.ctx.tracker is not None:
                 self.ctx.tracker.reset_game_state()
@@ -47,7 +56,7 @@ class Bejeweled3CommandProcessor(ClientCommandProcessor):
                 self.output(render_plain(build_guide(self.ctx.tracker, self.ctx.checked_locations)))
             return True
         if subcommand != "status":
-            self.output("Usage: /bj3 status | /bj3 guide | /bj3 rescan")
+            self.output("Usage: /bj3 status | /bj3 guide | /bj3 hint <item> | /bj3 rescan")
             return False
         for line in self.ctx.status_lines():
             self.output(line)
@@ -72,6 +81,7 @@ class Bejeweled3Context(CommonContext):
         self.last_status = ""
         self.game_task: asyncio.Task | None = None
         self.last_guide = ""
+        self.announce_hints_until = 0.0  # while > now, the next hint for us is also posted to the room chat
 
     # ------------------------------------------------------------------ server
 
@@ -108,8 +118,30 @@ class Bejeweled3Context(CommonContext):
                                                                   self.trap_index_key]}]), name="read binding")
         elif cmd == "ReceivedItems" and self.tracker is not None:
             self.tracker.set_received(item.item for item in self.items_received)
+        elif cmd == "PrintJSON" and args.get("type") == "Hint":
+            text = self.hint_announcement(args)
+            if text is not None:
+                async_start(self.send_msgs([{"cmd": "Say", "text": text}]), name="announce hint")
         elif cmd in ("Retrieved", "SetReply"):
             self._apply_stored_binding()
+
+    def request_announced_hint(self, item: str) -> None:
+        """Ask the server for a hint, and post the answer to the room chat when it arrives (within 30 s)."""
+        self.announce_hints_until = time.monotonic() + 30
+        async_start(self.send_msgs([{"cmd": "Say", "text": f"!hint {item}"}]), name="announced hint")
+
+    def hint_announcement(self, args: dict[str, Any]) -> str | None:
+        """The chat line for a hint we asked to announce, or None. One announcement per request."""
+        if args.get("receiving") != self.slot or time.monotonic() > self.announce_hints_until:
+            return None
+        item, location, finder = args["item"][0], args["item"][1], args["item"][2]
+        self.announce_hints_until = 0.0
+        me = self.player_names.get(self.slot, "I")
+        item_name = self.item_names.lookup_in_slot(item, self.slot)
+        if args.get("found"):
+            return f"{me}'s {item_name} was already found (thanks!)."
+        where = self.location_names.lookup_in_slot(location, finder)
+        return f"{me} is waiting on {item_name}: it's at \"{where}\" in {self.player_names.get(finder, '?')}'s world."
 
     def _apply_stored_binding(self) -> None:
         if self.tracker is None:

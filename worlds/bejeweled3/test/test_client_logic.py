@@ -3,6 +3,7 @@ RTTI validation and the client's attach handling, all without the game."""
 import asyncio
 import struct
 import sys
+import time
 import unittest
 
 from ..game.memory_map import STEAM_1_1_12_4196
@@ -510,3 +511,46 @@ class TestGuide(TrackerTestCase):
         tracker = self.short_tracker()
         self.feed(tracker, snap(profile="Someone Else"))
         self.assertIn("Paused:", self.guide(tracker))
+
+
+class TestHintAnnouncement(unittest.TestCase):
+    @staticmethod
+    def with_ctx(check) -> None:
+        """Run `check(ctx)` with a client context (which needs a running event loop to exist)."""
+        from ..client import Bejeweled3Context
+
+        async def run() -> None:
+            ctx = Bejeweled3Context(reader_factory=FakeReader)
+            ctx.slot = 1
+            ctx.player_names = {0: "Archipelago", 1: "Brian", 2: "Tom"}
+            ctx.item_names.lookup_in_slot = lambda code, slot=None: {1: "Quest Mode"}.get(code, "?")
+            ctx.location_names.lookup_in_slot = lambda code, slot=None: {77: "Shop 12"}.get(code, "?")
+            check(ctx)
+
+        asyncio.run(run())
+
+    @staticmethod
+    def hint(receiving: int = 1, found: bool = False) -> dict:
+        return {"type": "Hint", "receiving": receiving, "item": [1, 77, 2, 1], "found": found}
+
+    def test_requested_hint_is_announced_once(self) -> None:
+        def check(ctx) -> None:
+            ctx.announce_hints_until = time.monotonic() + 30
+            self.assertEqual(ctx.hint_announcement(self.hint()),
+                             "Brian is waiting on Quest Mode: it's at \"Shop 12\" in Tom's world.")
+            self.assertIsNone(ctx.hint_announcement(self.hint()))  # only the first hint after the request
+        self.with_ctx(check)
+
+    def test_unrequested_or_foreign_hints_are_not_announced(self) -> None:
+        def check(ctx) -> None:
+            self.assertIsNone(ctx.hint_announcement(self.hint()))  # nobody asked
+            ctx.announce_hints_until = time.monotonic() + 30
+            self.assertIsNone(ctx.hint_announcement(self.hint(receiving=2)))  # someone else's hint
+        self.with_ctx(check)
+
+    def test_found_item(self) -> None:
+        def check(ctx) -> None:
+            ctx.announce_hints_until = time.monotonic() + 30
+            self.assertEqual(ctx.hint_announcement(self.hint(found=True)),
+                             "Brian's Quest Mode was already found (thanks!).")
+        self.with_ctx(check)
