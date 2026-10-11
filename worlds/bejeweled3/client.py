@@ -144,15 +144,19 @@ class Bejeweled3Context(CommonContext):
 
             def build(self):
                 container = super().build()
-                from kivy.metrics import dp
-                from kivy.uix.scrollview import ScrollView
-                from kivymd.uix.label import MDLabel
+                try:  # the guide tab is a convenience: never let it take the client down
+                    from kivy.metrics import dp
+                    from kivy.uix.scrollview import ScrollView
+                    from kivymd.uix.label import MDLabel
 
-                self.guide_label = MDLabel(text="Connect to see your guide.", markup=True, adaptive_height=True,
-                                           padding=(dp(12), dp(12)))
-                scroll = ScrollView(do_scroll_x=False)
-                scroll.add_widget(self.guide_label)
-                self.add_client_tab("Bejeweled 3", scroll)
+                    label = MDLabel(text="Connect to see your guide.", markup=True, adaptive_height=True,
+                                    padding=(dp(12), dp(12)))
+                    scroll = ScrollView(do_scroll_x=False)
+                    scroll.add_widget(label)
+                    self.add_client_tab("Bejeweled 3", scroll)
+                    self.guide_label = label
+                except Exception:
+                    logger.exception("Couldn't create the Bejeweled 3 guide tab; use /bj3 guide instead.")
                 return container
 
         return Bejeweled3Manager
@@ -168,7 +172,10 @@ class Bejeweled3Context(CommonContext):
         self.last_guide = text
         label = getattr(self.ui, "guide_label", None) if self.ui else None
         if label is not None:
-            label.text = render_markup(lines)
+            try:
+                label.text = render_markup(lines)
+            except Exception:
+                logger.debug("guide tab update failed", exc_info=True)
 
     # ------------------------------------------------------------------ game
 
