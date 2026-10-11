@@ -44,7 +44,9 @@ from .locations import (
 
 BADGE_COUNT = 20
 QUEST_COUNT = 40
-MAX_TIER = 4
+MAX_TIER = 4  # common badges: 0 none, 1 Bronze ... 4 Platinum (2, 3, 4 verified)
+FIRST_ELITE_ID = 15
+MAX_ELITE_VALUE = 5  # elite badges store 5 when earned (Superstar, verified 2026-10-11 in Brian's live seed)
 HEROES_WELCOME_ID = 15
 LEVELORD_ID = 18
 LEVELORD_LEVEL_INDEX = MAX_LEVEL - 1  # board level is 0-based
@@ -71,7 +73,8 @@ class Baseline:
 
 def snapshot_is_valid(snapshot: Snapshot) -> bool:
     return (len(snapshot.badges) == BADGE_COUNT and len(snapshot.quests) == QUEST_COUNT
-            and all(0 <= tier <= MAX_TIER for tier in snapshot.badges)
+            and all(0 <= tier <= (MAX_TIER if badge_id < FIRST_ELITE_ID else MAX_ELITE_VALUE)
+                    for badge_id, tier in enumerate(snapshot.badges))
             and all(value in (0, 1) for value in snapshot.quests))
 
 

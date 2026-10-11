@@ -438,3 +438,25 @@ class TestLockedModeHint(TrackerTestCase):
         self.feed(tracker, snap(board=None))
         self.feed(tracker, snap(board=self.board(self.QUEST_BOARD, "Quest", 0x6000)))
         self.assertEqual(len(self.hints(tracker)), 2)
+
+
+class TestEliteValues(TrackerTestCase):
+    """Regression (live seed 2026-10-11): Superstar is stored as 5; that must not invalidate every snapshot."""
+
+    def test_elite_value_five_is_valid_and_earned(self) -> None:
+        tracker = self.make(items=(BADGE_TIER, BADGE_TIER, BADGE_TIER))
+        self.feed(tracker, snap(badges={3: 4, 17: 5}))
+        self.assertIsNotNone(tracker.stable)
+        sent = set(tracker.evaluate(set()))
+        self.assertIn(badge("Superstar"), sent)
+        self.assertIn(badge("Blaster", "Platinum"), sent)
+
+    def test_common_badge_above_four_still_invalid(self) -> None:
+        tracker = self.make()
+        self.feed(tracker, snap(badges={3: 5}))
+        self.assertIsNone(tracker.stable)
+
+    def test_elite_above_five_invalid(self) -> None:
+        tracker = self.make()
+        self.feed(tracker, snap(badges={17: 6}))
+        self.assertIsNone(tracker.stable)
