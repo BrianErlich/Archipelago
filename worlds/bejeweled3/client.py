@@ -17,10 +17,11 @@ import colorama
 
 from CommonClient import ClientCommandProcessor, CommonContext, get_base_parser, handle_url_arg, server_loop
 from NetUtils import ClientStatus
-from Utils import async_start, gui_enabled, init_logging
+from Utils import async_start, get_intended_text, gui_enabled, init_logging
 
 from .game.reader import AttachResult, AttachStatus, GameReader
 from .guide import build_guide, render_markup, render_plain
+from .items import ITEM_NAME_TO_ID
 from .locations import GAME_NAME
 from .tracker import GOAL_SHARD_HUNT, Baseline, Tracker
 
@@ -42,8 +43,7 @@ class Bejeweled3CommandProcessor(ClientCommandProcessor):
             if not item:
                 self.output("Usage: /bj3 hint <item name>, e.g. /bj3 hint Quest Mode")
                 return False
-            self.ctx.request_announced_hint(item)
-            return True
+            return self.ctx.request_announced_hint(item)
         if subcommand == "rescan":
             if self.ctx.tracker is not None:
                 self.ctx.tracker.reset_game_state()
@@ -82,6 +82,7 @@ class Bejeweled3Context(CommonContext):
         self.game_task: asyncio.Task | None = None
         self.last_guide = ""
         self.announce_hints_until = 0.0  # while > now, the next hint for us is also posted to the room chat
+        self.announce_item: str | None = None  # the item name that hint was for
 
     # ------------------------------------------------------------------ server
 
@@ -125,18 +126,27 @@ class Bejeweled3Context(CommonContext):
         elif cmd in ("Retrieved", "SetReply"):
             self._apply_stored_binding()
 
-    def request_announced_hint(self, item: str) -> None:
-        """Ask the server for a hint, and post the answer to the room chat when it arrives (within 30 s)."""
+    def request_announced_hint(self, item: str) -> bool:
+        """Ask the server for a hint, and post the answer to the room chat when it arrives (within 30 s).
+        The name is resolved here, the way the server does, so the answer can be matched to this request."""
+        name, usable, response = get_intended_text(item, ITEM_NAME_TO_ID.keys())
+        if not usable:
+            logger.info(response)
+            return False
+        self.announce_item = name
         self.announce_hints_until = time.monotonic() + 30
-        async_start(self.send_msgs([{"cmd": "Say", "text": f"!hint {item}"}]), name="announced hint")
+        async_start(self.send_msgs([{"cmd": "Say", "text": f"!hint {name}"}]), name="announced hint")
+        return True
 
     def hint_announcement(self, args: dict[str, Any]) -> str | None:
         """The chat line for a hint we asked to announce, or None. One announcement per request."""
         if args.get("receiving") != self.slot or time.monotonic() > self.announce_hints_until:
             return None
         item, location, finder = args["item"][0], args["item"][1], args["item"][2]
-        self.announce_hints_until = 0.0
         item_name = self.item_names.lookup_in_slot(item, self.slot)
+        if item_name != self.announce_item:
+            return None  # someone else hinted one of our items in the same window
+        self.announce_hints_until = 0.0
         if args.get("found"):
             return None  # nothing to ask the room for
         where = self.location_names.lookup_in_slot(location, finder)

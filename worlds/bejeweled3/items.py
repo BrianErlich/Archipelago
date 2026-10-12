@@ -19,6 +19,7 @@ from .locations import (
     ALL_MODES,
     BASE_ID,
     BASE_MODES,
+    CLASSIC,
     GAME_NAME,
     ICE_STORM,
     ICE_STORM_LENGTH,
@@ -26,6 +27,7 @@ from .locations import (
     MARATHON,
     MAX_LEVEL,
     MEDIUM_LENGTH,
+    QUEST,
     RELIC_COUNT,
     SHORT,
     max_common_tier,
@@ -95,6 +97,11 @@ def keys_needed_for_relic(relic: int) -> int:
 
 def starting_mode_name(world: Bejeweled3World) -> str:
     return BASE_MODES[world.options.starting_mode.value]
+
+
+def early_local_mode(world: Bejeweled3World) -> str:
+    """The other base mode with plenty of checks: Quest on a Classic start, Classic on a Quest start."""
+    return mode_item_name(QUEST if starting_mode_name(world) == CLASSIC else CLASSIC)
 
 
 def relic_key_count(world: Bejeweled3World) -> int:

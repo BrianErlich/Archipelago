@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from BaseClasses import CollectionState, ItemClassification, LocationProgressType
+from Fill import distribute_items_restrictive
 from test.general import gen_steps, setup_multiworld
 
 from ..items import BADGE_TIER, JEWEL_SHARD, LEVEL_CAP, RELIC_KEY
@@ -242,6 +243,27 @@ class TestOptionSweep(Bejeweled3TestBase):
                                    if location.progress_type != LocationProgressType.EXCLUDED
                                    and location.can_reach(start)]
                     self.assertGreaterEqual(len(open_checks), MIN_SPHERE_ZERO)
+
+
+class TestEarlyLocalMode(Bejeweled3TestBase):
+    """The other base mode lands in this slot's own sphere-1 checks (the live seed's item-starvation fix)."""
+    run_default_tests = False
+
+    def test_other_base_mode_is_local_and_early(self) -> None:
+        other = {"classic": "Quest Mode", "quest": "Classic Mode"}
+        for length, start in itertools.product(["short", "medium", "long", "marathon"], other):
+            for seed in range(3):
+                with self.subTest(seed_length=length, starting_mode=start, seed=seed):
+                    options = {"seed_length": length, "starting_mode": start}
+                    # Two slots, so "local" means something: the item could otherwise land in player 2's world.
+                    multiworld = setup_multiworld([Bejeweled3World, Bejeweled3World], gen_steps, seed=seed,
+                                                  options=[options, {}])
+                    distribute_items_restrictive(multiworld)
+                    placed = [location for location in multiworld.get_locations()
+                              if location.item and location.item.player == 1 and location.item.name == other[start]]
+                    self.assertEqual(len(placed), 1)
+                    self.assertEqual(placed[0].player, 1)
+                    self.assertTrue(placed[0].can_reach(CollectionState(multiworld)))
 
 
 class TestIdsStable(Bejeweled3TestBase):

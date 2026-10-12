@@ -253,6 +253,14 @@ class TestProfileBinding(TrackerTestCase):
         self.feed(tracker, snap(profile="AP-Seed", badges={3: 1}))
         self.assertEqual(tracker.evaluate(set()), [badge("Blaster", "Bronze")])
 
+    def test_one_garbage_name_read_resets_nothing(self) -> None:
+        tracker = self.make(profile="AP-Seed")
+        self.feed(tracker, snap(profile="AP-Seed", board=classic(level=3)))
+        tracker.update(snap(profile="AP-S\x00\x01", board=classic(level=3)))  # torn read during a switch
+        self.feed(tracker, snap(profile="AP-Seed", board=classic(level=3)))
+        self.assertEqual(tracker.session_best_level, 3)
+        self.assertEqual(tracker.drain_messages(), [])
+
 
 class TestGoals(TrackerTestCase):
     def test_shard_hunt(self) -> None:
@@ -523,19 +531,24 @@ class TestHintAnnouncement(unittest.TestCase):
             ctx = Bejeweled3Context(reader_factory=FakeReader)
             ctx.slot = 1
             ctx.player_names = {0: "Archipelago", 1: "Brian", 2: "Tom"}
-            ctx.item_names.lookup_in_slot = lambda code, slot=None: {1: "Quest Mode"}.get(code, "?")
+            ctx.item_names.lookup_in_slot = lambda code, slot=None: {1: "Quest Mode", 2: "Zen Mode"}.get(code, "?")
             ctx.location_names.lookup_in_slot = lambda code, slot=None: {77: "Shop 12"}.get(code, "?")
             check(ctx)
 
         asyncio.run(run())
 
     @staticmethod
-    def hint(receiving: int = 1, found: bool = False) -> dict:
-        return {"type": "Hint", "receiving": receiving, "item": [1, 77, 2, 1], "found": found}
+    def hint(receiving: int = 1, found: bool = False, item: int = 1) -> dict:
+        return {"type": "Hint", "receiving": receiving, "item": [item, 77, 2, 1], "found": found}
+
+    @staticmethod
+    def asked(ctx, item: str = "Quest Mode") -> None:
+        ctx.announce_item = item
+        ctx.announce_hints_until = time.monotonic() + 30
 
     def test_requested_hint_is_announced_once(self) -> None:
         def check(ctx) -> None:
-            ctx.announce_hints_until = time.monotonic() + 30
+            self.asked(ctx)
             self.assertEqual(ctx.hint_announcement(self.hint()),
                              "[Bejeweled 3 Client] Waiting on Quest Mode: Shop 12 (Tom's world).")
             self.assertIsNone(ctx.hint_announcement(self.hint()))  # only the first hint after the request
@@ -544,14 +557,30 @@ class TestHintAnnouncement(unittest.TestCase):
     def test_unrequested_or_foreign_hints_are_not_announced(self) -> None:
         def check(ctx) -> None:
             self.assertIsNone(ctx.hint_announcement(self.hint()))  # nobody asked
-            ctx.announce_hints_until = time.monotonic() + 30
+            self.asked(ctx)
             self.assertIsNone(ctx.hint_announcement(self.hint(receiving=2)))  # someone else's hint
+            self.assertIsNone(ctx.hint_announcement(self.hint(item=2)))  # another of our items, hinted by someone
+            self.assertIsNotNone(ctx.hint_announcement(self.hint()))  # ...doesn't use up the request
         self.with_ctx(check)
 
     def test_found_item(self) -> None:
         def check(ctx) -> None:
-            ctx.announce_hints_until = time.monotonic() + 30
+            self.asked(ctx)
             self.assertIsNone(ctx.hint_announcement(self.hint(found=True)))  # found already: nothing to ask
+        self.with_ctx(check)
+
+
+    def test_request_resolves_the_name_like_the_server(self) -> None:
+        def check(ctx) -> None:
+            sent = []
+
+            async def capture(msgs) -> None:
+                sent.extend(msgs)
+            ctx.send_msgs = capture
+            self.assertTrue(ctx.request_announced_hint("quest mode"))
+            self.assertEqual(ctx.announce_item, "Quest Mode")
+            self.assertFalse(ctx.request_announced_hint("Master Sword"))  # not one of ours: nothing is sent
+            self.assertEqual(ctx.announce_item, "Quest Mode")
         self.with_ctx(check)
 
 

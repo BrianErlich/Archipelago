@@ -143,13 +143,14 @@ class Tracker:
         if snapshot is None or not snapshot_is_valid(snapshot):
             self._last_raw = None
             return
-        if self.stable is not None and snapshot.profile_name != self.stable.profile_name:
-            self.messages.append(f"Active profile changed to '{snapshot.profile_name}'. Re-checking the binding.")
-            self.reset_game_state()
         previous, self._last_raw = self._last_raw, snapshot
         if previous is None or not _same_reading(previous, snapshot):
             return
-        if self.stable is not None and _went_backwards(self.stable, snapshot):
+        # Compared after the debounce, so one garbage name read mid-switch can't reset anything.
+        if self.stable is not None and snapshot.profile_name != self.stable.profile_name:
+            self.messages.append(f"Active profile changed to '{snapshot.profile_name}'. Re-checking the binding.")
+            self.reset_game_state()
+        elif self.stable is not None and _went_backwards(self.stable, snapshot):
             return  # garbage read: tiers and quests never decrease within a profile session
         self.stable = snapshot
         self._update_board_session(snapshot)

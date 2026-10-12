@@ -38,6 +38,9 @@ class Bejeweled3World(World):
         location_count = len(locations.enabled_locations(self))
         if progression > location_count:  # a data bug, not a player mistake: every length/goal combination must fit
             raise RuntimeError(f"Bejeweled 3: {progression} progression items for {location_count} locations")
+        # The live seed starved when the other base mode sat deep in another player's world: put it in one of
+        # this slot's own sphere-1 checks so the first hour always opens a second mode.
+        self.multiworld.local_early_items[self.player][items.early_local_mode(self)] = 1
 
     def create_regions(self) -> None:
         regions.create_and_connect_regions(self)

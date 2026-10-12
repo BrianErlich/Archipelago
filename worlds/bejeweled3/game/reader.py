@@ -267,6 +267,8 @@ class PymemReader:
 
     def rtti_name(self, obj: int) -> str | None:
         """MSVC x86 RTTI: obj -> vtable; vtable[-1] -> CompleteObjectLocator; COL+12 -> TypeDescriptor; TD+8 -> name."""
+        # Caching vtable -> name is safe while everything else re-resolves per tick: vtables live in the exe image,
+        # which never moves or changes, so a given vtable always names the same class.
         vtable = self._u32(obj)
         if vtable in self._rtti_cache:
             return self._rtti_cache[vtable]
