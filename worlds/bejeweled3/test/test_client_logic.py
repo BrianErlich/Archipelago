@@ -365,6 +365,19 @@ class TestReaderValidation(unittest.TestCase):
         self.assertIsNotNone(snapshot)
         self.assertIsNone(snapshot.board)
 
+    def test_inline_short_name(self) -> None:
+        # The live game always heap-allocates profile names (capacity 15, even for 'AB' on a cold start), but the
+        # MSVC inline form (capacity 7, text in the 16-byte buffer) must still read correctly.
+        reader = self.build()
+        memory_read = reader._read
+
+        def read(address: int, size: int) -> bytes:
+            if address == self.PROFILE + STEAM_1_1_12_4196.profile_name and size == 24:
+                return "AB".encode("utf-16-le").ljust(16, b"\0") + struct.pack("<II", 2, 7)
+            return memory_read(address, size)
+        reader._read = read  # type: ignore[method-assign]
+        self.assertEqual(reader.read().profile_name, "AB")
+
     def test_wrong_profile_class_is_unknown_tick(self) -> None:
         self.assertIsNone(self.build(profile_class=".?AVSomethingElse@Sexy@@").read())
 
