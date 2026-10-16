@@ -1,0 +1,45 @@
+name: Publish Bejeweled 3 beta
+
+on:
+  push:
+    branches: [release/bejeweled3-0.2.0]
+    paths:
+      - releases/bejeweled3-0.2.0/**
+      - .github/workflows/publish-bejeweled3.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-bejeweled3-0.2.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch the exact release-assets commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Verify assets and create the beta release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd releases/bejeweled3-0.2.0
+          sha256sum --check SHA256SUMS.txt
+          python3 -m zipfile --test bejeweled3.apworld
+          gh release create bejeweled3-0.2.0 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target 290005cd421909582757e7da6138cfe5f401407a \
+            --title 'Bejeweled 3 for Archipelago — 0.2.0 beta' \
+            --prerelease \
+            --notes-file RELEASE-NOTES.md \
+            bejeweled3.apworld Bejeweled3.yaml SHA256SUMS.txt

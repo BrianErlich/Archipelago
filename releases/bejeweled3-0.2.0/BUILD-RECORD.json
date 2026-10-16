@@ -1,0 +1,31 @@
+{
+  "source_commit": "290005cd421909582757e7da6138cfe5f401407a",
+  "version": "0.2.0",
+  "packaged_files": 25,
+  "source_sha256": {
+    "CHANGELOG.md": "5ee43019e3af8524f3572add3728361b392b579081484fbe4800befae455387a",
+    "README.md": "954e0229ecc99b7caabe6850d2e0babdcde0e5e0ec7f078e8fbb0c80f64f3be9",
+    "__init__.py": "480214a440242bf27a86851b121b7b7c77ab6f13d5674a7f38ed36966f0236f8",
+    "client.py": "cc99f6ce06f7f7130d514d941f449427b877e7a88ab591f2c58f14b3fbc7a11e",
+    "components.py": "b4f7265f22cfe6bd7c8900abbd4ea6dba9b6d5d1a62f0de46290a137c69a7506",
+    "docs/en_Bejeweled 3.md": "8fb0667d6acfae08b438030e47afeec70e7c8738f0f5f61c474108bf2b1d16e6",
+    "docs/setup_en.md": "d35fa77477925e506643e3a9779d010679e4c269dfdfb56c83cdd0a3ee5c5bdc",
+    "game/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "game/memory_map.py": "6ad8eba12aa1f0af233a8a15e64b3be24e2c3eb7de14b608f5348a901b07ebfe",
+    "game/reader.py": "2b887f685efe468e1d13eb3203e9776fcde8a67306bf054c65dd318f4477b18c",
+    "guide.py": "9c1368112e78c910a060850c92df91c1b491b83dbe8e352a639bea0c69c805eb",
+    "items.py": "acf63fef8619820cc1a40ea5f831ef67223908210763d15e5c9e4ca68e0bbbc6",
+    "locations.py": "65eb6e357962930ec7dc9d272aad55697260935c05cce8565227f72906641695",
+    "options.py": "f4d04b92eca13fd070efc16ed10db911ad05e9b5095fa833e6182aee285a4cd9",
+    "regions.py": "99644bf74b40975169ab0de2ba1a5047b3777d5bc41e9276315c691954eb3307",
+    "rules.py": "27a3d7cd1fff4f501e9c58347d9d4d57c3600541544e9971790f3646765e3c7b",
+    "test/__init__.py": "adc5ad7051f85a608debd7f0e23d8ac16788b49e1ffde8f98c31f2da8600751b",
+    "test/ids_snapshot.json": "950cce85572f6c41bd16de710ac0b389bb540160c64247e5a18f990de0150bf2",
+    "test/test_client_logic.py": "56a4deca290b2646db7cc0b23a83a040ce374bf451d71f6cf0f4266a0d4b9a00",
+    "test/test_generation.py": "307f73fe8ff0cce40bb2e89245e7ac95e4bfdeebecbab0b7970bd42b8e58423b",
+    "tracker.py": "7beb3af04fa2bc67614d0e6ef8831d5ec3ccd4d80fd7175815b0032aa900d23d",
+    "web_world.py": "ce47bcf2cd7714cf29649fcc669e878e4f62140470943aafe1cc1d9ed33f7e7c",
+    "world.py": "33f4c9c9b3cbc64b6572049b16594ba1caaf19515227364cf97ef43e21c28542"
+  },
+  "validation": "Python AST parse, ZIP CRC, manifest, paths; no imports/runtime/game test"
+}

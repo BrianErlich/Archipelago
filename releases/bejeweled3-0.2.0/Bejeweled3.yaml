@@ -1,0 +1,6 @@
+name: YourName
+game: Bejeweled 3
+Bejeweled 3:
+  seed_length: short
+  goal: shard_hunt
+  starting_mode: classic
