@@ -36,6 +36,10 @@ jobs:
           cd releases/bejeweled3-0.2.0
           sha256sum --check SHA256SUMS.txt
           python3 -m zipfile --test bejeweled3.apworld
+          if gh release view bejeweled3-0.2.0 --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo 'Release already exists; leaving published assets unchanged.'
+            exit 0
+          fi
           gh release create bejeweled3-0.2.0 \
             --repo "${GITHUB_REPOSITORY}" \
             --target 290005cd421909582757e7da6138cfe5f401407a \
